@@ -6,7 +6,7 @@ import ScheduleList from './components/ScheduleList';
 
 export default function App() {
   const today = new Date();
-  const firstTuesday = getNextTuesday(today, false); // Prima marți viitoare, excluzând azi dacă a trecut 23:59
+  const firstTuesday = getNextTuesday(today, false); // Prima marți viitoare, excluzând azi dacă a trecut 20:00
 
   // Generează 10 webinarii viitoare
   const futureDates = useMemo(() => {
@@ -35,7 +35,7 @@ export default function App() {
   return (
     <main className="min-h-screen w-full bg-gray-900 flex flex-col items-center justify-start p-6 sm:p-8">
       <h1 className="text-3xl sm:text-4xl font-bold text-gray-200 mb-6 flex items-center gap-2">
-        <span>📅</span> Program Mentori ProFX
+        <span>📅</span> Program Webinarii ProFX
       </h1>
       {nextWebinar.date ? (
         <div className="flex justify-center w-full">
