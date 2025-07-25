@@ -6,24 +6,36 @@ import { getNextTuesday, getConsecutiveTuesdays } from './utils/dates';
 import NextWebinarCard from './components/NextWebinarCard';
 import ScheduleList from './components/ScheduleList';
 
-// Schimbă: rulează populate DOAR dacă baza e GOALĂ, și DOAR la primul render!
+// Construiește Date cu ora 20:00 (local)
+function getDateWithEightPM(dateStr) {
+  // dateStr = "YYYY-MM-DD"
+  return new Date(dateStr + "T20:00:00");
+}
+
+// Populează doar dacă baza e goală, și scrie ORA 20:00 la fiecare webinar!
 async function populateMissingTuesdaysIfEmpty(db, dates, rotation, mentors) {
   const col = collection(db, 'webinarii');
   const snapshot = await getDocs(col);
   if (!snapshot.empty) return false; // STOP dacă există deja date!
 
   for (let i = 0; i < dates.length; i++) {
+    // Atenție: aici dateStr nu are oră!
     const dateStr = dates[i].toISOString().split('T')[0];
     const rotaIndex = i % rotation.length;
     const [m1, m2] = rotation[rotaIndex];
-    const mentorsPair = (mentors[m1] && mentors[m2])
-      ? `${mentors[m1]} & ${mentors[m2]}`
-      : "Mentori indisponibili";
-    const docRef = doc(db, 'webinarii', dateStr);
+    const mentorsPair =
+      (mentors[m1] && mentors[m2])
+        ? `${mentors[m1]} & ${mentors[m2]}`
+        : "Mentori indisponibili";
 
+    const docRef = doc(db, 'webinarii', dateStr);
+    // Construim Date cu ora 20:00
+    const dateAtEight = getDateWithEightPM(dateStr);
+
+    // SCRIEM ÎN DB CA ISO complet cu ora!
     await setDoc(docRef, {
-      date: dateStr,
-      mentori: mentorsPair
+      date: dateAtEight.toISOString(),
+      mentori: mentorsPair,
     }, { merge: true });
   }
   return true;
@@ -40,7 +52,6 @@ export default function App() {
 
   const [webinarData, setWebinarData] = useState([]);
   const [loading, setLoading] = useState(true);
-  // FLAG care asigură o singură execuție (pentru efectele dependente de async)
   const populatedOnce = useRef(false);
 
   useEffect(() => {
@@ -51,25 +62,37 @@ export default function App() {
     const init = async () => {
       setLoading(true);
       await populateMissingTuesdaysIfEmpty(db, futureDates, rotation, mentors);
+
+      // La CITIRE, avem deja ora 20:00 la fiecare date!
       const querySnapshot = await getDocs(collection(db, 'webinarii'));
       const data = querySnapshot.docs
-        .map(docu => ({ id: docu.id, ...docu.data() }))
-        .filter(item => futureDates.some(date => date.toISOString().split('T')[0] === item.id));
+        .map(docu => ({
+          id: docu.id,
+          ...docu.data(),
+          // Citim ca Date cu ora corectă
+          date: docu.data().date ? new Date(docu.data().date) : null
+        }))
+        .filter(item =>
+          futureDates.some(date =>
+            date.toISOString().split('T')[0] === item.id
+          )
+        );
       setWebinarData(data);
       setLoading(false);
     };
     init();
   }, [db, futureDates, rotation, mentors]);
+
   const nextWebinar = useMemo(() => {
     const now = new Date();
     const sorted = webinarData
       .filter(item => item.date)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-    const closest = sorted.find(item => new Date(item.date) >= now);
+      .sort((a, b) => a.date - b.date);
+    const closest = sorted.find(item => item.date >= now);
 
     if (closest) {
       return {
-        date: new Date(closest.date),
+        date: closest.date,
         mentorsPair: closest.mentori,
         webinarId: closest.id,
       };
@@ -105,8 +128,16 @@ export default function App() {
               setLoading(true);
               const querySnapshot = await getDocs(collection(db, 'webinarii'));
               const data = querySnapshot.docs
-                .map(docu => ({ id: docu.id, ...docu.data() }))
-                .filter(item => futureDates.some(date => date.toISOString().split('T')[0] === item.id));
+                .map(docu => ({
+                  id: docu.id,
+                  ...docu.data(),
+                  date: docu.data().date ? new Date(docu.data().date) : null
+                }))
+                .filter(item =>
+                  futureDates.some(date =>
+                    date.toISOString().split('T')[0] === item.id
+                  )
+                );
               setWebinarData(data);
               setLoading(false);
             }}

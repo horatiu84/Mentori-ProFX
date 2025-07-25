@@ -1,24 +1,33 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { mentors, rotation } from '../data/mentors';
 import { formatDateRO, isSameDay } from '../utils/dates';
 
-// Scoatem React.memo temporar să fie sigur rerender-ul la schimbare
 function ScheduleList({ dates, webinarData = [] }) {
-  const today = useMemo(() => new Date(), []);
   const rotationLength = rotation.length;
+  const today = new Date();
 
-  // Funcția care decide ce label afișează pentru o dată: din DB dacă există, altfel fallback
   const getMentorsLabel = (date) => {
     const dateStr = date.toISOString().split('T')[0];
-    const doc = webinarData.find(d => d.date === dateStr);
+    // Find by exact ziua, indiferent de ora sau tipul de date
+    const doc = webinarData.find(d => {
+      if (!d.date) return false;
+      if (d.date instanceof Date) {
+        return d.date.toISOString().split('T')[0] === dateStr;
+      }
+      if (typeof d.date === 'string') {
+        return d.date.split('T')[0] === dateStr;
+      }
+      return false;
+    });
     if (doc && doc.mentori) {
       return doc.mentori;
     }
-
-    // fallback după rotație
+    // fallback rotație
     const i = dates.findIndex(d => d.toISOString().split('T')[0] === dateStr);
     const [m1, m2] = rotation[i % rotationLength] || [];
-    return (mentors[m1] && mentors[m2]) ? `${mentors[m1]} & ${mentors[m2]}` : 'Mentori indisponibili';
+    return (mentors[m1] && mentors[m2])
+      ? `${mentors[m1]} & ${mentors[m2]}`
+      : 'Mentori indisponibili';
   };
 
   return (

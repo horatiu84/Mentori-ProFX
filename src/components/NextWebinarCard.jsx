@@ -1,9 +1,15 @@
+/* eslint-disable no-unused-vars */
 import React, { useState } from 'react';
 import { useCountdown } from '../hooks/useCountdown';
 import { formatDateRO } from '../utils/dates';
 import { db } from '../firebase';
 import { setDoc, doc } from 'firebase/firestore';
 import { mentors } from '../data/mentors';
+
+// Utility: primește string gen "2025-07-29" și returnează Date cu ora 20:00 local
+function getDateWithEightPM(dateStr) {
+  return new Date(dateStr + "T20:00:00");
+}
 
 const NextWebinarCard = ({ date, mentorsPair, webinarId, afterSaveReload }) => {
   const { days, hrs, mins, secs, isExpired } = useCountdown(date.getTime());
@@ -21,10 +27,13 @@ const NextWebinarCard = ({ date, mentorsPair, webinarId, afterSaveReload }) => {
     const newMentorsPair = `${selectedMentor1} & ${selectedMentor2}`;
     const webinarRef = doc(db, 'webinarii', webinarId);
 
+    
+    const dateAtEight = getDateWithEightPM(webinarId);
+
     try {
       await setDoc(webinarRef, {
         mentori: newMentorsPair,
-        date: webinarId,
+        date: dateAtEight.toISOString(),   
       }, { merge: true });
       setIsEditing(false);
       setSaving(false);
@@ -33,7 +42,6 @@ const NextWebinarCard = ({ date, mentorsPair, webinarId, afterSaveReload }) => {
       if (afterSaveReload) {
         await afterSaveReload();
       }
-    // eslint-disable-next-line no-unused-vars
     } catch (error) {
       setSaving(false);
       alert('Eroare la salvare. Încearcă iar.');
