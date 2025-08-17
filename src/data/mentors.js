@@ -1,20 +1,15 @@
 export const mentors = {
   A: "Eli",
-  B: "Tudor",
-  C: "Cosmin",
+  B: "Tudor", 
   D: "Dan",
   E: "Adrian",
 };
 
 export const rotation = [
-  ["A", "B"],
-  ["A", "C"],
-  ["A", "D"],
-  ["A", "E"],
-  ["B", "C"],
-  ["B", "D"],
-  ["B", "E"],
-  ["C", "D"],
-  ["C", "E"],
-  ["D", "E"],
+  ["A", "B"], // Eli + Tudor
+  ["A", "D"], // Eli + Dan
+  ["A", "E"], // Eli + Adrian
+  ["B", "D"], // Tudor + Dan
+  ["B", "E"], // Tudor + Adrian
+  ["D", "E"], // Dan + Adrian
 ];
