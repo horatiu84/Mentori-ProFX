@@ -1,0 +1,21 @@
+rules_version = '2';
+
+/**
+ * Firebase Security Rules - Versiune Simplă (Development)
+ * 
+ * ⚠️ ATENȚIE: Aceste reguli sunt permisive și potrivite doar pentru development!
+ * Pentru producție, folosește firestore.rules cu autentificare.
+ * 
+ * Copiază în Firebase Console → Firestore Database → Rules
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Toată lumea poate citi și scrie (DOAR PENTRU DEVELOPMENT!)
+    match /{document=**} {
+      allow read: if true;
+      allow write: if true;
+    }
+  }
+}

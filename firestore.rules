@@ -1,0 +1,62 @@
+rules_version = '2';
+
+/**
+ * Firebase Security Rules pentru ProFx Webinarii
+ * 
+ * Copiază aceste reguli în Firebase Console:
+ * Firebase Console → Firestore Database → Rules
+ */
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== FUNCȚII HELPER ====================
+    
+    // Verifică dacă utilizatorul este autentificat
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Verifică dacă utilizatorul este admin
+    function isAdmin() {
+      return isSignedIn() && 
+             get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Verifică dacă utilizatorul este mentor
+    function isMentor() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/mentori/$(request.auth.uid));
+    }
+    
+    // ==================== REGULI PENTRU COLECȚII ====================
+    
+    // MENTORI - Doar admini pot scrie, toată lumea poate citi
+    match /mentori/{mentorId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // CLASE - Doar admini pot scrie, toată lumea poate citi
+    match /clase/{classId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // STUDENȚI - Doar admini pot scrie, toată lumea poate citi
+    match /studenti/{studentId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // ADMINS - Doar pentru verificare, nu poate fi modificat decât manual
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Niciodată prin app, doar manual
+    }
+  }
+}
