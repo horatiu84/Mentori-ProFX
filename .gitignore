@@ -25,3 +25,8 @@ dist-ssr
 
 # Windows special files
 nul
+
+# Environment variables (API keys, secrets)
+.env
+.env.local
+.env.*.local

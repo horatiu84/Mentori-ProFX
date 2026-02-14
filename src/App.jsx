@@ -1,6 +1,6 @@
 import React from "react";
-import MentorAttendanceTracker from "./Mentors1la20";
+import Mentori1La20 from "./Mentors1la20";
 
 export default function App() {
-  return <MentorAttendanceTracker />;
+  return <Mentori1La20 />;
 }
