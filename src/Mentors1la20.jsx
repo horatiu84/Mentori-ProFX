@@ -6,7 +6,7 @@ import { Card, CardContent } from "./components/ui/card";
 import logo from "./logo2.png";
 import { collection, addDoc, updateDoc, deleteDoc, doc, Timestamp, getDocs, query, orderBy, setDoc, getDoc } from "firebase/firestore";
 import { db } from "./firebase";
-import * as XLSX from "xlsx";
+// ExcelJS se încarcă lazy doar când e nevoie (import/export)
 
 // ==================== CONSTANTE ====================
 
@@ -325,7 +325,7 @@ export default function Mentori1La20() {
     localStorage.removeItem('currentUser');
     localStorage.removeItem('currentRole');
     localStorage.removeItem('currentMentorId');
-    navigate('/');
+    navigate('/login');
   };
 
   const handleFileChange = (e) => {
@@ -340,12 +340,22 @@ export default function Mentori1La20() {
   const parseExcelFile = async (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+          const ExcelJS = (await import('exceljs')).default;
+          const buffer = e.target.result;
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(buffer);
+          const worksheet = workbook.worksheets[0];
+          const headers = [];
+          worksheet.getRow(1).eachCell((cell) => { headers.push(cell.value); });
+          const jsonData = [];
+          worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+            const rowObj = {};
+            row.eachCell((cell, colNumber) => { rowObj[headers[colNumber - 1]] = cell.value; });
+            jsonData.push(rowObj);
+          });
           const leaduriValide = jsonData.map((row, index) => {
             const nume = row['Nume'] || row['nume'] || row['Name'] || row['name'] || '';
             const telefon = row['Telefon'] || row['telefon'] || row['Phone'] || row['phone'] || '';
@@ -1065,8 +1075,9 @@ Contact:
     });
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     try {
+      const ExcelJS = (await import('exceljs')).default;
       // Pregătește datele pentru export
       const exportData = leaduri.map(lead => {
         const mentor = mentoriData.find(m => m.id === lead.mentorAlocat);
@@ -1085,14 +1096,22 @@ Contact:
         };
       });
 
-      // Creează workbook și worksheet
-      const ws = XLSX.utils.json_to_sheet(exportData);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Leaduri');
+      // Creează workbook și worksheet cu ExcelJS
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Leaduri');
+      if (exportData.length > 0) {
+        ws.columns = Object.keys(exportData[0]).map(key => ({ header: key, key }));
+        exportData.forEach(row => ws.addRow(row));
+      }
 
       // Generează fișier și declanșează descărcarea
       const fileName = `leaduri_export_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      const buffer = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName; a.click();
+      URL.revokeObjectURL(url);
 
       setSuccess(`${leaduri.length} leaduri exportate cu succes în ${fileName}!`);
     } catch (err) {
