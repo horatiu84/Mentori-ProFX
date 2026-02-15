@@ -1,5 +1,6 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "./components/ui/input";
 import { Card, CardContent } from "./components/ui/card";
 import logo from "./logo2.png";
@@ -99,6 +100,7 @@ const getStatusBadge = (status) => {
 };
 
 export default function Mentori1La20() {
+  const navigate = useNavigate();
   const mentors = [
     { username: "Sergiu", password: "Sergiu", role: "mentor", mentorId: "sergiu" },
     { username: "Dan", password: "Dan", role: "mentor", mentorId: "dan" },
@@ -165,6 +167,15 @@ export default function Mentori1La20() {
     if (modalConfig.onConfirm) modalConfig.onConfirm();
     closeModal();
   };
+
+  // Verificăm autentificarea din localStorage la încărcarea componentei
+  useEffect(() => {
+    const authData = localStorage.getItem('isAuthenticated');
+    if (authData === 'true') {
+      // Aici am putea restaura și datele utilizatorului din localStorage dacă dorim
+      setIsAuthenticated(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) { fetchAllData(); }
@@ -318,12 +329,15 @@ export default function Mentori1La20() {
     if (user) {
       setIsAuthenticated(true); setCurrentMentor(username);
       setCurrentRole(user.role); setCurrentMentorId(user.mentorId); setLoginError("");
+      localStorage.setItem('isAuthenticated', 'true');
     } else { setLoginError("Username sau parola gresita!"); }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false); setCurrentMentor(null); setCurrentRole(null);
     setCurrentMentorId(null); setUsername(""); setPassword(""); setError(""); setSuccess("");
+    localStorage.removeItem('isAuthenticated');
+    navigate('/');
   };
 
   const handleFileChange = (e) => {
