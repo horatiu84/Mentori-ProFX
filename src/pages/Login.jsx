@@ -1,17 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import logo from '../logo2.png';
-
-const mentors = [
-  { username: "Sergiu", password: "Sergiu", role: "mentor", mentorId: "sergiu" },
-  { username: "Dan", password: "Dan", role: "mentor", mentorId: "dan" },
-  { username: "Tudor", password: "Tudor", role: "mentor", mentorId: "tudor" },
-  { username: "Eli", password: "Eli", role: "mentor", mentorId: "eli" },
-  { username: "Adrian", password: "Adrian", role: "mentor", mentorId: "adrian" },
-  { username: "Admin", password: "Admin", role: "admin", mentorId: null },
-];
 
 export default function Login() {
   const navigate = useNavigate();
@@ -20,29 +13,46 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // Simulăm un mic delay pentru UX
-    setTimeout(() => {
-      const user = mentors.find(m => m.username === username && m.password === password);
-      
-      if (user) {
-        // Salvăm datele de autentificare în localStorage
-        localStorage.setItem('isAuthenticated', 'true');
-        localStorage.setItem('currentUser', username);
-        localStorage.setItem('currentRole', user.role);
-        localStorage.setItem('currentMentorId', user.mentorId || '');
-        
-        // Redirecționăm la dashboard
-        navigate('/admin');
-      } else {
+    try {
+      // Verificăm credențialele în Firestore
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('username', '==', username));
+      const querySnapshot = await getDocs(q);
+
+      if (querySnapshot.empty) {
         setError('Username sau parolă greșită!');
         setLoading(false);
+        return;
       }
-    }, 500);
+
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+
+      // Verificăm parola (în Firestore avem parolele stocate - într-o aplicație reală ar fi hash-uri)
+      if (userData.password !== password) {
+        setError('Username sau parolă greșită!');
+        setLoading(false);
+        return;
+      }
+
+      // Autentificare reușită - salvăm datele în localStorage
+      localStorage.setItem('isAuthenticated', 'true');
+      localStorage.setItem('currentUser', userData.username);
+      localStorage.setItem('currentRole', userData.role);
+      localStorage.setItem('currentMentorId', userData.mentorId || '');
+      
+      // Redirecționăm la dashboard
+      navigate('/admin');
+    } catch (err) {
+      console.error('Eroare la autentificare:', err);
+      setError('A apărut o eroare la autentificare. Te rugăm să încerci din nou.');
+      setLoading(false);
+    }
   };
 
   return (

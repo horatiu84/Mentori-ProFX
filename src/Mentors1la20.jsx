@@ -101,22 +101,11 @@ const getStatusBadge = (status) => {
 
 export default function Mentori1La20() {
   const navigate = useNavigate();
-  const mentors = [
-    { username: "Sergiu", password: "Sergiu", role: "mentor", mentorId: "sergiu" },
-    { username: "Dan", password: "Dan", role: "mentor", mentorId: "dan" },
-    { username: "Tudor", password: "Tudor", role: "mentor", mentorId: "tudor" },
-    { username: "Eli", password: "Eli", role: "mentor", mentorId: "eli" },
-    { username: "Adrian", password: "Adrian", role: "mentor", mentorId: "adrian" },
-    { username: "Admin", password: "Admin", role: "admin", mentorId: null },
-  ];
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentMentor, setCurrentMentor] = useState(null);
   const [currentRole, setCurrentRole] = useState(null);
   const [currentMentorId, setCurrentMentorId] = useState(null);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
   const [leaduri, setLeaduri] = useState([]);
   const [mentoriData, setMentoriData] = useState([]);
   const [alocariActive, setAlocariActive] = useState([]);
@@ -326,19 +315,11 @@ export default function Mentori1La20() {
     } catch (err) { console.error("Eroare fetch alocari:", err); }
   };
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const user = mentors.find(m => m.username === username && m.password === password);
-    if (user) {
-      setIsAuthenticated(true); setCurrentMentor(username);
-      setCurrentRole(user.role); setCurrentMentorId(user.mentorId); setLoginError("");
-      localStorage.setItem('isAuthenticated', 'true');
-    } else { setLoginError("Username sau parola gresita!"); }
-  };
-
   const handleLogout = () => {
-    setIsAuthenticated(false); setCurrentMentor(null); setCurrentRole(null);
-    setCurrentMentorId(null); setUsername(""); setPassword(""); setError(""); setSuccess("");
+    setIsAuthenticated(false); 
+    setCurrentMentor(null); 
+    setCurrentRole(null);
+    setCurrentMentorId(null);
     // Curățăm toate datele de autentificare din localStorage
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('currentUser');
@@ -1311,44 +1292,6 @@ Contact:
       };
     })
     .filter(a => a !== null); // Elimină mentorii fără leaduri
-
-  // ==================== LOGIN PAGE ====================
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900 flex items-center justify-center px-4">
-        <Card className="w-full max-w-md bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
-          <CardContent className="p-8 space-y-6">
-            <div className="text-center space-y-4">
-              <div className="flex justify-center"><img src={logo} alt="ProFX Logo" className="h-16 w-auto" /></div>
-              <h1 className="text-3xl font-bold text-blue-400">Gestionare Leaduri</h1>
-              <p className="text-gray-300 text-sm">Autentifica-te pentru a accesa dashboard-ul</p>
-            </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Username</label>
-                <Input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
-                  className="w-full p-3 bg-gray-800/50 border border-gray-600/50 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400/50"
-                  placeholder="Introdu username-ul" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2 text-white">Parola</label>
-                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="w-full p-3 bg-gray-800/50 border border-gray-600/50 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-400/50"
-                  placeholder="Introdu parola" />
-              </div>
-              {loginError && (
-                <div className="bg-red-500/20 border border-red-500/50 text-red-300 p-3 rounded-xl text-sm text-center">{loginError}</div>
-              )}
-              <button type="submit" className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-300 shadow-lg hover:shadow-blue-500/50">
-                Autentifica-te
-              </button>
-            </form>
-            <div className="text-center text-gray-400 text-xs"><p>Mentori: Sergiu, Dan, Tudor, Eli, Adrian</p></div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   // ==================== ADMIN DASHBOARD ====================
   if (currentRole === "admin") {
