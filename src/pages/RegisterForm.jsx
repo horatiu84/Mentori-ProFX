@@ -303,16 +303,6 @@ export default function RegisterForm() {
           </form>
         </CardContent>
       </Card>
-
-      {/* Footer pentru mentori */}
-      <div className="text-center mt-6">
-        <a 
-          href="/admin" 
-          className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
-        >
-          Ești mentor? Accesează dashboard-ul →
-        </a>
-      </div>
     </div>
   );
 }

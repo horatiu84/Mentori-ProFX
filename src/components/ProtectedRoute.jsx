@@ -22,9 +22,9 @@ export default function ProtectedRoute({ children }) {
     );
   }
 
-  // Redirect la pagina de înscriere dacă nu este autentificat
+  // Redirect la pagina de login dacă nu este autentificat
   if (!isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   return children;

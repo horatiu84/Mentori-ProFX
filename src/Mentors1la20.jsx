@@ -172,8 +172,11 @@ export default function Mentori1La20() {
   useEffect(() => {
     const authData = localStorage.getItem('isAuthenticated');
     if (authData === 'true') {
-      // Aici am putea restaura și datele utilizatorului din localStorage dacă dorim
+      // Restaurăm datele utilizatorului din localStorage
       setIsAuthenticated(true);
+      setCurrentMentor(localStorage.getItem('currentUser') || '');
+      setCurrentRole(localStorage.getItem('currentRole') || '');
+      setCurrentMentorId(localStorage.getItem('currentMentorId') || null);
     }
   }, []);
 
@@ -336,7 +339,11 @@ export default function Mentori1La20() {
   const handleLogout = () => {
     setIsAuthenticated(false); setCurrentMentor(null); setCurrentRole(null);
     setCurrentMentorId(null); setUsername(""); setPassword(""); setError(""); setSuccess("");
+    // Curățăm toate datele de autentificare din localStorage
     localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('currentRole');
+    localStorage.removeItem('currentMentorId');
     navigate('/');
   };
 

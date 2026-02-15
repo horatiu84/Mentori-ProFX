@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Mentori1La20 from "./Mentors1la20";
 import ConfirmWebinar from "./pages/ConfirmWebinar";
 import RegisterForm from "./pages/RegisterForm";
+import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -11,6 +12,9 @@ export default function App() {
       <Routes>
         {/* Pagina publică de înscriere - ruta principală */}
         <Route path="/" element={<RegisterForm />} />
+        
+        {/* Pagina de login pentru mentorii și admin */}
+        <Route path="/login" element={<Login />} />
         
         {/* Pagina publică de confirmare */}
         <Route path="/confirm/:token" element={<ConfirmWebinar />} />
