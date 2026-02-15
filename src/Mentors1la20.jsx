@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Input } from "./components/ui/input";
 import { Card, CardContent } from "./components/ui/card";
 import logo from "./logo2.png";
@@ -146,6 +146,9 @@ export default function Mentori1La20() {
   const [emailContent, setEmailContent] = useState({ subject: '', body: '' });
   const [showAdminEmailModal, setShowAdminEmailModal] = useState(false);
   const [selectedMentorForEmail, setSelectedMentorForEmail] = useState(null);
+  const [bulkEmailPreview, setBulkEmailPreview] = useState(null);
+  const isAutoAllocatingRef = useRef(false);
+  const lastAutoAllocCheckRef = useRef(0);
 
   const showAlert = (title, message) => {
     setModalConfig({ type: 'alert', title, message, onConfirm: null });
@@ -167,6 +170,33 @@ export default function Mentori1La20() {
     if (isAuthenticated) { fetchAllData(); }
   }, [isAuthenticated]);
 
+  // Auto-alocă leaduri când datele se schimbă
+  useEffect(() => {
+    const now = Date.now();
+    const timeSinceLastCheck = now - lastAutoAllocCheckRef.current;
+    
+    // Rulează verificarea doar dacă au trecut mai mult de 3 secunde de la ultima verificare
+    if (isAuthenticated && leaduri.length > 0 && mentoriData.length > 0 && !loadingData && !isAutoAllocatingRef.current && timeSinceLastCheck > 3000) {
+      const verificaAutoAlocare = async () => {
+        isAutoAllocatingRef.current = true;
+        lastAutoAllocCheckRef.current = Date.now();
+        
+        const modificari = await checkAndAutoAllocate();
+        
+        // Dacă s-au făcut modificări, reîmprospătează datele după un mic delay
+        if (modificari) {
+          setTimeout(async () => {
+            await fetchAllData();
+            isAutoAllocatingRef.current = false;
+          }, 1000);
+        } else {
+          isAutoAllocatingRef.current = false;
+        }
+      };
+      verificaAutoAlocare();
+    }
+  }, [leaduri, mentoriData, isAuthenticated, loadingData]);
+
   const fetchAllData = async () => {
     setLoadingData(true);
     await Promise.all([fetchMentori(), fetchLeaduri(), fetchAlocari()]);
@@ -178,11 +208,29 @@ export default function Mentori1La20() {
       const mentoriSnapshot = await getDocs(collection(db, "mentori"));
       let mentoriList = mentoriSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       if (mentoriList.length === 0) { await initializeMentori(); return; }
+      
+      // Sincronizează numărul real de leaduri pentru fiecare mentor
+      const leaduriSnapshot = await getDocs(collection(db, "leaduri"));
+      const toateLeadurile = leaduriSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      
       for (const mentor of mentoriList) {
-        if (mentor.available && (mentor.leaduriAlocate || 0) >= 20) {
+        // Calculează numărul real de leaduri alocate acestui mentor
+        const leaduriRealeMentor = toateLeadurile.filter(l => l.mentorAlocat === mentor.id).length;
+        
+        // Actualizează doar dacă e diferit
+        if ((mentor.leaduriAlocate || 0) !== leaduriRealeMentor) {
+          await updateDoc(doc(db, "mentori", mentor.id), { 
+            leaduriAlocate: leaduriRealeMentor,
+            available: leaduriRealeMentor >= 30 ? false : mentor.available
+          });
+        } else if (mentor.available && leaduriRealeMentor >= 30) {
           await updateDoc(doc(db, "mentori", mentor.id), { available: false });
+        } else if (!mentor.available && leaduriRealeMentor < 30) {
+          // Reactivează mentorul dacă are mai puțin de 30 leaduri
+          await updateDoc(doc(db, "mentori", mentor.id), { available: true });
         }
       }
+      
       const updatedSnapshot = await getDocs(collection(db, "mentori"));
       setMentoriData(updatedSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) { console.error("Eroare fetch mentori:", err); }
@@ -227,7 +275,40 @@ export default function Mentori1La20() {
   const fetchAlocari = async () => {
     try {
       const snap = await getDocs(collection(db, "alocari"));
-      setAlocariActive(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const alocariList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Încarcă toate leadurile pentru sincronizare
+      const leaduriSnapshot = await getDocs(collection(db, "leaduri"));
+      const toateLeadurile = leaduriSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      
+      // Sincronizează fiecare alocare cu realitatea
+      for (const alocare of alocariList) {
+        // Găsește leadurile reale care aparțin acestei alocări
+        const leaduriReale = toateLeadurile.filter(l => 
+          alocare.leaduri && alocare.leaduri.includes(l.id)
+        );
+        
+        const numarRealDeLeaduri = leaduriReale.length;
+        
+        // Dacă numărul e diferit, actualizează în DB
+        if (alocare.numarLeaduri !== numarRealDeLeaduri || alocare.leaduri.length !== numarRealDeLeaduri) {
+          const leaduriIdReale = leaduriReale.map(l => l.id);
+          await updateDoc(doc(db, "alocari", alocare.id), {
+            numarLeaduri: numarRealDeLeaduri,
+            leaduri: leaduriIdReale,
+            ultimaActualizare: Timestamp.now()
+          });
+        }
+        
+        // Șterge alocările goale
+        if (numarRealDeLeaduri === 0) {
+          await deleteDoc(doc(db, "alocari", alocare.id));
+        }
+      }
+      
+      // Re-încarcă alocările după sincronizare
+      const snap2 = await getDocs(collection(db, "alocari"));
+      setAlocariActive(snap2.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (err) { console.error("Eroare fetch alocari:", err); }
   };
 
@@ -310,19 +391,200 @@ export default function Mentori1La20() {
     finally { setLoading(false); }
   };
 
+  // Funcție silențioasă pentru alocare automată (fără loading UI)
+  const checkAndAutoAllocate = async () => {
+    let modificari = false;
+    
+    try {
+      // PRIORITATE 1: Realocă IMEDIAT leadurile neconfirmate, chiar dacă sunt sub 20
+      const leaduriNeconfirmate = leaduri.filter(l => l.status === LEAD_STATUS.NECONFIRMAT);
+      
+      if (leaduriNeconfirmate.length > 0) {
+        console.log(`🔄 Găsite ${leaduriNeconfirmate.length} leaduri neconfirmate - se realocă automat...`);
+        modificari = true;
+        
+        // Pentru fiecare lead neconfirmat, găsește următorul mentor disponibil
+        for (const lead of leaduriNeconfirmate) {
+          const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
+          const mentorActual = lead.mentorAlocat;
+          
+          // Găsește următorul mentor eligibil (diferit de cel actual și cu < 30 leaduri)
+          const mentorNou = mentoriSortati.find(m => {
+            const leadCnt = m.leaduriAlocate || 0;
+            return m.id !== mentorActual && leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30));
+          });
+          
+          if (!mentorNou) {
+            console.warn(`⚠️ Nu există mentor disponibil pentru "${lead.nume}"`);
+            continue;
+          }
+          
+          const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === mentorNou.id);
+          const mentorNume = mentorInfo ? mentorInfo.nume : mentorNou.id;
+          
+          // Șterge lead-ul din alocarea veche (dacă există)
+          if (lead.alocareId) {
+            const alocareVeche = alocariActive.find(a => a.id === lead.alocareId);
+            if (alocareVeche) {
+              const leaduriRamase = alocareVeche.leaduri.filter(id => id !== lead.id);
+              if (leaduriRamase.length === 0) {
+                await deleteDoc(doc(db, "alocari", lead.alocareId));
+              } else {
+                await updateDoc(doc(db, "alocari", lead.alocareId), {
+                  numarLeaduri: leaduriRamase.length,
+                  leaduri: leaduriRamase,
+                  ultimaActualizare: Timestamp.now()
+                });
+              }
+            }
+          }
+          
+          // Actualizează lead-ul pentru noua alocare
+          const alocareExistenta = alocariActive.find(a => a.mentorId === mentorNou.id && a.status === 'activa');
+          let alocRef;
+          
+          if (alocareExistenta) {
+            const leaduriActualizate = [...alocareExistenta.leaduri, lead.id];
+            await updateDoc(doc(db, "alocari", alocareExistenta.id), {
+              numarLeaduri: leaduriActualizate.length,
+              leaduri: leaduriActualizate,
+              ultimaActualizare: Timestamp.now()
+            });
+            alocRef = { id: alocareExistenta.id };
+          } else {
+            alocRef = await addDoc(collection(db, "alocari"), {
+              mentorId: mentorNou.id,
+              mentorNume: mentorNume,
+              numarLeaduri: 1,
+              leaduri: [lead.id],
+              createdAt: Timestamp.now(),
+              status: 'activa'
+            });
+          }
+          
+          const da = Timestamp.now();
+          await updateDoc(doc(db, "leaduri", lead.id), {
+            status: LEAD_STATUS.ALOCAT,
+            mentorAlocat: mentorNou.id,
+            alocareId: alocRef.id,
+            dataAlocare: da,
+            dataTimeout: null,
+            emailTrimis: false,
+            istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
+            numarReAlocari: (lead.numarReAlocari || 0) + 1,
+            motivNeconfirmare: null
+          });
+          
+          // Actualizează contorul de leaduri pentru mentorul nou
+          await updateDoc(doc(db, "mentori", mentorNou.id), {
+            leaduriAlocate: (mentorNou.leaduriAlocate || 0) + 1
+          });
+          
+          console.log(`✅ Re-alocare automată: Lead "${lead.nume}" de la ${mentorActual} -> ${mentorNume}`);
+        }
+      }
+      
+      // PRIORITATE 2: Alocă leadurile nealocate DOAR dacă sunt minim 20
+      const leaduriNealocate = leaduri.filter(l => l.status === LEAD_STATUS.NEALOCAT);
+      
+      if (leaduriNealocate.length >= 20) {
+        // Găsește mentor eligibil (trebuie să aibă mai puțin de 30 leaduri)
+        const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
+        const mentorEligibil = mentoriSortati.find(m => {
+          const leadCnt = m.leaduriAlocate || 0;
+          // Mentor eligibil: are < 30 leaduri ȘI (este disponibil SAU are deja 20-29 leaduri)
+          return leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30));
+        });
+        
+        if (mentorEligibil) {
+          console.log(`🔄 Găsite ${leaduriNealocate.length} leaduri nealocate - se alocă automat...`);
+          modificari = true;
+          
+          const leadCntActual = mentorEligibil.leaduriAlocate || 0;
+          const spatDisponibil = 30 - leadCntActual;
+          
+          let nrDeAlocat;
+          if (leadCntActual === 0) {
+            nrDeAlocat = Math.min(30, leaduriNealocate.length);
+          } else if (leadCntActual >= 20 && leadCntActual < 30) {
+            nrDeAlocat = Math.min(spatDisponibil, leaduriNealocate.length);
+          } else {
+            return modificari;
+          }
+          
+          const batch = leaduriNealocate.slice(0, nrDeAlocat);
+          const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === mentorEligibil.id);
+          const mentorNume = mentorInfo ? mentorInfo.nume : mentorEligibil.id;
+          
+          const alocareExistenta = alocariActive.find(a => a.mentorId === mentorEligibil.id && a.status === 'activa');
+          let alocRef;
+          
+          if (alocareExistenta) {
+            const leaduriActualizate = [...alocareExistenta.leaduri, ...batch.map(l => l.id)];
+            await updateDoc(doc(db, "alocari", alocareExistenta.id), {
+              numarLeaduri: leaduriActualizate.length,
+              leaduri: leaduriActualizate,
+              ultimaActualizare: Timestamp.now()
+            });
+            alocRef = { id: alocareExistenta.id };
+          } else {
+            alocRef = await addDoc(collection(db, "alocari"), {
+              mentorId: mentorEligibil.id, 
+              mentorNume: mentorNume, 
+              numarLeaduri: nrDeAlocat,
+              leaduri: batch.map(l => l.id), 
+              createdAt: Timestamp.now(), 
+              status: 'activa'
+            });
+          }
+          
+          const da = Timestamp.now();
+          
+          for (const lead of batch) {
+            await updateDoc(doc(db, "leaduri", lead.id), {
+              status: LEAD_STATUS.ALOCAT, 
+              mentorAlocat: mentorEligibil.id, 
+              alocareId: alocRef.id,
+              dataAlocare: da, 
+              dataTimeout: null,
+              emailTrimis: false,
+              istoricMentori: [...(lead.istoricMentori || []), mentorEligibil.id],
+              numarReAlocari: 0
+            });
+          }
+          
+          const nuLeaduriTotale = leadCntActual + nrDeAlocat;
+          await updateDoc(doc(db, "mentori", mentorEligibil.id), {
+            leaduriAlocate: nuLeaduriTotale,
+            available: nuLeaduriTotale >= 30 ? false : mentorEligibil.available
+          });
+          
+          console.log(`✅ Auto-alocare: ${nrDeAlocat} leaduri nealocate către ${mentorNume}. Total: ${nuLeaduriTotale}/30`);
+        }
+      }
+      
+      return modificari;
+    } catch (err) {
+      console.error("❌ Eroare la alocarea automată:", err);
+      return modificari;
+    }
+  };
+
   const alocaLeaduriAutomata = async () => {
     setLoading(true); setError(""); setSuccess("");
     try {
+      // Lucrăm doar cu leadurile nealocate (cele neconfirmate se realocă automat)
       const nealoc = leaduri.filter(l => l.status === LEAD_STATUS.NEALOCAT);
       if (nealoc.length === 0) { setError('Nu exista leaduri nealocate'); setLoading(false); return; }
       
       // Sortăm mentorii după ordineCoada
       const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
       
-      // Găsim primul mentor eligibil (available SAU are între 20-29 leaduri)
+      // Găsim primul mentor eligibil (trebuie să aibă mai puțin de 30 leaduri)
       const mentorEligibil = mentoriSortati.find(m => {
         const leadCnt = m.leaduriAlocate || 0;
-        return m.available || (leadCnt >= 20 && leadCnt < 30);
+        // Mentor eligibil: are < 30 leaduri ȘI (este disponibil SAU are deja 20-29 leaduri)
+        return leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30));
       });
       
       if (!mentorEligibil) { 
@@ -397,7 +659,7 @@ export default function Mentori1La20() {
           dataTimeout: null, // Timeout-ul va fi setat când se trimite emailul
           emailTrimis: false,
           istoricMentori: [...(lead.istoricMentori || []), mentorEligibil.id],
-          numarReAlocari: (lead.numarReAlocari || 0)
+          numarReAlocari: 0 // Leadurile nealocate sunt prima alocare
         });
       }
       
@@ -438,36 +700,55 @@ export default function Mentori1La20() {
     setShowDateModal(true);
   };
 
-  const generateEmailContent = (lead) => {
-    const mentor = mentoriData.find(m => m.id === currentMentorId);
+  const generateEmailContent = (lead, mentorId = null) => {
+    const mentor = mentoriData.find(m => m.id === (mentorId || currentMentorId));
     const webinarDate = mentor?.ultimulOneToTwenty;
+    const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === (mentorId || currentMentorId));
+    const mentorName = mentorInfo ? mentorInfo.nume : currentMentor;
     
     if (!webinarDate) {
       setError('Te rog seteaza mai intai data webinarului!');
       return null;
     }
 
+    // Generăm linkul de confirmare folosind ID-ul leadului ca token
+    const confirmationLink = `${window.location.origin}/confirm/${lead.id}`;
+
     const subject = `Invitatie Webinar 1:20 - ProFX`;
     const body = `Buna ziua ${lead.nume},
 
-Sunt ${currentMentor}, mentorul tau de la ProFX!
+Sunt ${mentorName}, mentorul tau de la ProFX!
 
-Te invit sa participi la webinarul nostru 1:20 unde vom discuta despre:
+Te invit să participi la webinarul nostru 1:20 dedicat începătorilor, unde vom construi împreună baza corectă în trading, pas cu pas.
 
-✅ Strategii de trading avansate
-✅ Analiza pietei si oportunitati
-✅ Raspunsuri la intrebarile tale personale
-✅ Plan personalizat de dezvoltare
+În cadrul webinarului vei învăța:
+
+✅ Ce înseamnă tradingul și cum funcționează piața
+✅ Ce sunt Buy Stop/Limit, Sell Stop/Limit, Stop Loss (SL) și Take Profit (TP)
+✅ Cum se folosește platforma MT5 și cum se plasează corect un ordin
+✅ Noțiuni esențiale pentru a începe în siguranță, fără confuzie
+
+Webinarul este gândit special pentru cei care pornesc de la zero și vor să înțeleagă lucrurile simplu și practic.
+
+La final vei putea adresa întrebări și vei avea o imagine clară asupra pașilor următori.
 
 Data si ora webinarului:
 📅 ${formatDate(webinarDate)}
 
-Link participare: [Se va trimite cu 30 minute inainte de start]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 CONFIRMA PARTICIPAREA TA:
+👉 ${confirmationLink}
+
+Te rog să confirmi participarea ta accesând link-ul de mai sus.
+Link-ul de participare la webinar îți va fi trimis cu 30 minute înainte de start.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 Te astept cu drag!
 
 Cu respect,
-${currentMentor}
+${mentorName}
 Mentor ProFX
 
 Contact:
@@ -499,7 +780,7 @@ Contact:
       // Simulare trimitere
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // DUPĂ trimiterea emailului, setăm timeout-ul de 6 ore
+      // DUPĂ trimiterea emailului, setăm timeout-ul de 6 ore și tokenul de confirmare
       if (selectedLeadForEmail.status === LEAD_STATUS.ALOCAT) {
         const now = Timestamp.now();
         const timeoutDate = Timestamp.fromDate(new Date(now.toDate().getTime() + TIMEOUT_6H));
@@ -507,7 +788,8 @@ Contact:
         await updateDoc(doc(db, "leaduri", selectedLeadForEmail.id), {
           dataTimeout: timeoutDate,
           emailTrimis: true,
-          dataTrimiereEmail: now
+          dataTrimiereEmail: now,
+          confirmationToken: selectedLeadForEmail.id // folosim ID-ul ca token de confirmare
         });
         
         await fetchLeaduri();
@@ -538,7 +820,16 @@ Contact:
     }
     
     setSelectedMentorForEmail(mentor);
+    setBulkEmailPreview(null); // Reset preview
     setShowAdminEmailModal(true);
+  };
+
+  const showBulkEmailPreview = (lead) => {
+    if (!selectedMentorForEmail) return;
+    const content = generateEmailContent(lead, selectedMentorForEmail.id);
+    if (content) {
+      setBulkEmailPreview({ lead, content });
+    }
   };
 
   const sendBulkEmail = async () => {
@@ -560,11 +851,17 @@ Contact:
       console.log(`Trimitere ${mentorLeads.length} emailuri pentru mentorul ${selectedMentorForEmail.nume}`);
       console.log('Catre leaduri:', mentorLeads.map(l => `${l.nume} (${l.email})`));
       
+      // Pentru fiecare lead, generăm emailul cu linkul de confirmare specific
+      for (const lead of mentorLeads) {
+        const confirmationLink = `${window.location.origin}/confirm/${lead.id}`;
+        console.log(`Link confirmare pentru ${lead.nume}: ${confirmationLink}`);
+      }
+      
       // TODO: Aici va fi integrarea cu serviciul de email
       // Simulare trimitere
       await new Promise(resolve => setTimeout(resolve, 1500));
       
-      // DUPĂ ce emailurile sunt trimise, setăm timeout-ul de 6 ore
+      // DUPĂ ce emailurile sunt trimise, setăm timeout-ul de 6 ore și tokenul
       const now = Timestamp.now();
       const timeoutDate = Timestamp.fromDate(new Date(now.toDate().getTime() + TIMEOUT_6H));
       
@@ -573,7 +870,8 @@ Contact:
           await updateDoc(doc(db, "leaduri", lead.id), {
             dataTimeout: timeoutDate,
             emailTrimis: true,
-            dataTrimiereEmail: now
+            dataTrimiereEmail: now,
+            confirmationToken: lead.id // folosim ID-ul ca token de confirmare
           });
         }
       }
@@ -684,14 +982,121 @@ Contact:
     showConfirmDialog("Stergere Leaduri Mentor", 'Stergi toate cele ' + alocare.numarLeaduri + ' leaduri ale mentorului ' + alocare.mentorNume + '?', async () => {
       setLoading(true);
       try {
-        const ls = leaduri.filter(l => alocare.leaduri.includes(l.id));
-        for (const l of ls) await deleteDoc(doc(db, "leaduri", l.id));
-        await deleteDoc(doc(db, "alocari", alocare.id));
-        const m = mentoriData.find(x => x.id === alocare.mentorId);
-        if (m) await updateDoc(doc(db, "mentori", alocare.mentorId), { leaduriAlocate: Math.max(0, (m.leaduriAlocate || 0) - alocare.numarLeaduri), available: true });
-        await fetchAllData(); setSuccess('Leadurile mentorului ' + alocare.mentorNume + ' au fost sterse!');
-      } catch (err) { setError("Eroare la stergerea leadurilor mentorului"); } finally { setLoading(false); }
+        // Găsește toate leadurile mentorului
+        const leaduriMentor = leaduri.filter(l => l.mentorAlocat === alocare.mentorId);
+        
+        // Șterge fiecare lead
+        for (const l of leaduriMentor) {
+          await deleteDoc(doc(db, "leaduri", l.id));
+        }
+        
+        // Găsește și șterge TOATE alocările acestui mentor din DB
+        const alocariMentor = alocariActive.filter(a => a.mentorId === alocare.mentorId);
+        for (const aloc of alocariMentor) {
+          await deleteDoc(doc(db, "alocari", aloc.id));
+        }
+        
+        // Resetează contorul mentorului
+        const mentorDB = mentoriData.find(x => x.id === alocare.mentorId);
+        if (mentorDB) {
+          await updateDoc(doc(db, "mentori", alocare.mentorId), { 
+            leaduriAlocate: 0, 
+            available: true 
+          });
+        }
+        
+        await fetchAllData(); 
+        setSuccess('Leadurile mentorului ' + alocare.mentorNume + ' au fost sterse!');
+      } catch (err) { 
+        console.error("Eroare la stergerea leadurilor:", err);
+        setError("Eroare la stergerea leadurilor mentorului"); 
+      } finally { 
+        setLoading(false); 
+      }
     });
+  };
+
+  const dezalocaLeaduriMentor = (alocare) => {
+    showConfirmDialog("Dezalocare Leaduri", 'Dezaloci toate cele ' + alocare.numarLeaduri + ' leaduri ale mentorului ' + alocare.mentorNume + '? Leadurile vor ramane in sistem cu status NEALOCAT.', async () => {
+      setLoading(true);
+      try {
+        // Găsește toate leadurile mentorului
+        const leaduriMentor = leaduri.filter(l => l.mentorAlocat === alocare.mentorId);
+        
+        // Resetează fiecare lead la status NEALOCAT
+        for (const l of leaduriMentor) {
+          await updateDoc(doc(db, "leaduri", l.id), {
+            status: LEAD_STATUS.NEALOCAT,
+            mentorAlocat: null,
+            dataAlocare: null,
+            dataTimeout: null,
+            dataConfirmare: null,
+            emailTrimis: false,
+            alocareId: null
+            // Păstrează istoricMentori și numarReAlocari pentru tracking
+          });
+        }
+        
+        // Găsește și șterge TOATE alocările acestui mentor din DB
+        const alocariMentor = alocariActive.filter(a => a.mentorId === alocare.mentorId);
+        for (const aloc of alocariMentor) {
+          await deleteDoc(doc(db, "alocari", aloc.id));
+        }
+        
+        // Resetează contorul mentorului
+        const mentorDB = mentoriData.find(x => x.id === alocare.mentorId);
+        if (mentorDB) {
+          await updateDoc(doc(db, "mentori", alocare.mentorId), { 
+            leaduriAlocate: 0, 
+            available: true 
+          });
+        }
+        
+        await fetchAllData(); 
+        setSuccess(alocare.numarLeaduri + ' leaduri dezalocate de la ' + alocare.mentorNume + '! Leadurile sunt acum nealocate.');
+      } catch (err) { 
+        console.error("Eroare la dezalocarea leadurilor:", err);
+        setError("Eroare la dezalocarea leadurilor mentorului"); 
+      } finally { 
+        setLoading(false); 
+      }
+    });
+  };
+
+  const exportToExcel = () => {
+    try {
+      // Pregătește datele pentru export
+      const exportData = leaduri.map(lead => {
+        const mentor = mentoriData.find(m => m.id === lead.mentorAlocat);
+        const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+        const mentorNume = mentorInfo ? mentorInfo.nume : (mentor ? mentor.nume : '');
+        
+        return {
+          'Nume': lead.nume || '',
+          'Telefon': lead.telefon || '',
+          'Email': lead.email || '',
+          'Status': lead.status || '',
+          'Mentor': mentorNume,
+          'Data Alocare': lead.dataAlocare ? new Date(lead.dataAlocare.seconds * 1000).toLocaleString('ro-RO') : '',
+          'Data Confirmare': lead.dataConfirmare ? new Date(lead.dataConfirmare.seconds * 1000).toLocaleString('ro-RO') : '',
+          'Observatii': lead.observatii || ''
+        };
+      });
+
+      // Creează workbook și worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Leaduri');
+
+      // Generează fișier și declanșează descărcarea
+      const fileName = `leaduri_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      setSuccess(`${leaduri.length} leaduri exportate cu succes în ${fileName}!`);
+    } catch (err) {
+      console.error('Eroare la exportul în Excel:', err);
+      setError('Eroare la exportul în Excel');
+    }
   };
 
   const resetMentori = () => {
@@ -777,7 +1182,8 @@ Contact:
     const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
     const mentorEligibil = mentoriSortati.find(m => {
       const leadCnt = m.leaduriAlocate || 0;
-      return m.available || (leadCnt >= 20 && leadCnt < 30);
+      // Mentor eligibil: are < 30 leaduri ȘI (este disponibil SAU are deja 20-29 leaduri)
+      return leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30));
     });
     if (!mentorEligibil) return false;
     const leadCnt = mentorEligibil.leaduriAlocate || 0;
@@ -836,6 +1242,54 @@ Contact:
   const mentorIndexOfLast = mentorCurrentPage * leaduriPerPage;
   const mentorIndexOfFirst = mentorIndexOfLast - leaduriPerPage;
   const mentorLeaduriCurente = mentorLeaduriSortate.slice(mentorIndexOfFirst, mentorIndexOfLast);
+
+  // Creează lista unică de mentori bazată pe MENTORI_DISPONIBILI
+  const mentoriUnici = MENTORI_DISPONIBILI.map(mentorDef => {
+    // Găsește datele mentorului din DB (poate exista sau nu)
+    const mentorDB = mentoriData.find(m => m.id === mentorDef.id);
+    
+    // Calculează numărul REAL de leaduri din lista de leaduri
+    const leaduriRealeMentor = leaduri.filter(l => l.mentorAlocat === mentorDef.id).length;
+    
+    return {
+      id: mentorDef.id,
+      nume: mentorDef.nume,
+      available: mentorDB?.available ?? true,
+      ultimulOneToTwenty: mentorDB?.ultimulOneToTwenty ?? null,
+      ordineCoada: mentorDB?.ordineCoada ?? MENTORI_DISPONIBILI.findIndex(m => m.id === mentorDef.id),
+      leaduriAlocate: leaduriRealeMentor, // Folosește numărul REAL din leaduri
+      createdAt: mentorDB?.createdAt ?? Timestamp.now()
+    };
+  });
+
+  // Agregă alocările pe mentor (combină alocările duplicate)
+  const alocariAggregate = mentoriUnici
+    .map(mentor => {
+      // Găsește toate leadurile acestui mentor
+      const leaduriMentor = leaduri.filter(l => l.mentorAlocat === mentor.id);
+      
+      if (leaduriMentor.length === 0) return null;
+      
+      // Găsește prima alocare (pentru data creării)
+      const primaAlocare = alocariActive
+        .filter(a => a.mentorId === mentor.id)
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+          return dateA - dateB;
+        })[0];
+      
+      return {
+        id: mentor.id, // Folosește ID-ul mentorului, nu al alocării
+        mentorId: mentor.id,
+        mentorNume: mentor.nume,
+        numarLeaduri: leaduriMentor.length,
+        leaduri: leaduriMentor.map(l => l.id),
+        createdAt: primaAlocare?.createdAt ?? Timestamp.now(),
+        status: 'activa'
+      };
+    })
+    .filter(a => a !== null); // Elimină mentorii fără leaduri
 
   // ==================== LOGIN PAGE ====================
   if (!isAuthenticated) {
@@ -970,7 +1424,7 @@ Contact:
           <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
             <CardContent className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-bold text-blue-400">Mentori ({mentoriData.length})</h2>
+                <h2 className="text-xl font-bold text-blue-400">Mentori ({mentoriUnici.length})</h2>
                 <div className="flex gap-2">
                   {mentoriData.length > 5 && (
                     <button onClick={stergeMentoriDuplicati} disabled={loading}
@@ -985,12 +1439,8 @@ Contact:
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-                {mentoriData
-                  .sort((a, b) => {
-                    const oA = MENTORI_DISPONIBILI.findIndex(m => m.id === a.id);
-                    const oB = MENTORI_DISPONIBILI.findIndex(m => m.id === b.id);
-                    return (oA === -1 ? 999 : oA) - (oB === -1 ? 999 : oB);
-                  })
+                {mentoriUnici
+                  .sort((a, b) => a.ordineCoada - b.ordineCoada)
                   .map((mentor, index) => (
                     <div key={mentor.id} className={"border-2 rounded-xl p-4 transition-all " + (mentor.available ? 'border-green-500/50 bg-gray-800/30' : 'border-gray-600/50 bg-gray-800/30')}>
                       <div className="text-center">
@@ -1066,10 +1516,14 @@ Contact:
           <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
             <CardContent className="p-6">
               <h2 className="text-xl font-bold text-blue-400 mb-4">Actiuni</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <button onClick={() => setShowUploadForm(!showUploadForm)}
                   className="bg-gradient-to-r from-blue-500/20 to-blue-600/20 hover:from-blue-500/30 hover:to-blue-600/30 border border-blue-500/50 text-blue-300 px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2">
                   Incarca Leaduri
+                </button>
+                <button onClick={exportToExcel} disabled={loading || leaduri.length === 0}
+                  className={"px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border " + (loading || leaduri.length === 0 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-purple-500/20 to-purple-600/20 hover:from-purple-500/30 hover:to-purple-600/30 border-purple-500/50 text-purple-300')}>
+                  Export Excel
                 </button>
                 <button onClick={alocaLeaduriAutomata} disabled={loading || !canAllocateLeads()}
                   className={"px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border " + (loading || !canAllocateLeads() ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-green-500/20 to-green-600/20 hover:from-green-500/30 hover:to-green-600/30 border-green-500/50 text-green-300')}>
@@ -1165,12 +1619,16 @@ Contact:
           )}
 
           {/* Active Allocations */}
-          {alocariActive.length > 0 && (
+          {alocariAggregate.length > 0 && (
             <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
               <CardContent className="p-6">
                 <h2 className="text-xl font-bold text-blue-400 mb-4">Alocari Active</h2>
                 <div className="space-y-3">
-                  {alocariActive.sort((a, b) => b.createdAt - a.createdAt).map((alocare) => (
+                  {alocariAggregate.sort((a, b) => {
+                    const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(a.createdAt);
+                    const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(b.createdAt);
+                    return dateB - dateA;
+                  }).map((alocare) => (
                     <div key={alocare.id} className="border border-gray-700/50 rounded-xl p-4 bg-gray-800/30 hover:bg-gray-800/50 transition-all">
                       <div className="flex justify-between items-start">
                         <div>
@@ -1179,6 +1637,10 @@ Contact:
                           <p className="text-xs text-gray-500">{formatDate(alocare.createdAt)}</p>
                         </div>
                         <div className="flex gap-2">
+                          <button onClick={() => dezalocaLeaduriMentor(alocare)} disabled={loading}
+                            className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 px-3 py-1.5 rounded-lg text-sm transition-all disabled:opacity-50">
+                            Dezalocare
+                          </button>
                           <button onClick={() => stergeLaeduriMentor(alocare)} disabled={loading}
                             className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-1.5 rounded-lg text-sm transition-all disabled:opacity-50">
                             Sterge
@@ -1270,7 +1732,7 @@ Contact:
                       </thead>
                       <tbody className="divide-y divide-gray-700/30">
                         {leaduriCurente.map((lead, index) => {
-                          const mentor = mentoriData.find(m => m.id === lead.mentorAlocat);
+                          const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
                           const isEd = editingLead === lead.id;
                           const badge = getStatusBadge(lead.status);
                           return (
@@ -1293,7 +1755,7 @@ Contact:
                                   )}
                                 </div>
                               </td>
-                              <td className="px-4 py-3 text-sm text-gray-300">{mentor ? mentor.nume : '-'}</td>
+                              <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
                               <td className="px-4 py-3 text-sm text-gray-400">{formatDate(lead.createdAt)}</td>
                               <td className="px-4 py-3 text-sm">
                                 {isEd ? (
@@ -1305,14 +1767,6 @@ Contact:
                                   </div>
                                 ) : (
                                   <div className="flex flex-col gap-1.5">
-                                    {lead.status === LEAD_STATUS.ALOCAT && (
-                                      <div className="flex gap-1">
-                                        <button onClick={() => handleConfirmLead(lead.id)} disabled={loading} title="Confirma"
-                                          className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">Confirma</button>
-                                        <button onClick={() => handleRejectLead(lead.id)} disabled={loading} title="Refuza"
-                                          className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">Refuza</button>
-                                      </div>
-                                    )}
                                     {lead.status === LEAD_STATUS.CONFIRMAT && (
                                       <div className="flex gap-1">
                                         <button onClick={() => handleCompleteLead(lead.id)} disabled={loading} title="Complet"
@@ -1428,19 +1882,50 @@ Contact:
                       {leaduri
                         .filter(l => l.mentorAlocat === selectedMentorForEmail.id && (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT))
                         .map(lead => (
-                          <div key={lead.id} className="flex items-center justify-between py-2 px-3 bg-gray-700/30 rounded-lg">
-                            <div>
-                              <p className="text-white text-sm font-semibold">{lead.nume}</p>
+                          <button
+                            key={lead.id}
+                            onClick={() => showBulkEmailPreview(lead)}
+                            className="w-full flex items-center justify-between py-2 px-3 bg-gray-700/30 hover:bg-gray-700/50 rounded-lg transition-all cursor-pointer group"
+                          >
+                            <div className="text-left">
+                              <p className="text-white text-sm font-semibold group-hover:text-blue-300 transition-colors">{lead.nume}</p>
                               <p className="text-gray-400 text-xs">{lead.email}</p>
                             </div>
                             <span className={"px-2 py-1 text-xs font-semibold rounded-full " + getStatusBadge(lead.status).bg}>
                               {getStatusBadge(lead.status).label}
                             </span>
-                          </div>
+                          </button>
                         ))}
                     </div>
                   </div>
                 </div>
+
+                {/* Preview Email pentru lead selectat */}
+                {bulkEmailPreview && (
+                  <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-500/30 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="font-semibold text-blue-300 flex items-center gap-2">
+                        <span>👁️</span> Preview Email - {bulkEmailPreview.lead.nume}
+                      </h4>
+                      <button 
+                        onClick={() => setBulkEmailPreview(null)}
+                        className="text-gray-400 hover:text-white text-xl"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                    <div className="bg-gray-900/50 rounded-lg p-4 max-h-64 overflow-y-auto">
+                      <div className="mb-3 pb-3 border-b border-gray-700/50">
+                        <p className="text-xs text-gray-400 mb-1">Subiect:</p>
+                        <p className="text-white font-semibold text-sm">{bulkEmailPreview.content.subject}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400 mb-2">Conținut:</p>
+                        <pre className="text-gray-300 whitespace-pre-wrap font-sans text-xs leading-relaxed">{bulkEmailPreview.content.body}</pre>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-700/50">
@@ -1680,14 +2165,6 @@ Contact:
                                 className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2">
                                 <span>✉️</span> Email
                               </button>
-                            )}
-                            {lead.status === LEAD_STATUS.ALOCAT && (
-                              <>
-                                <button onClick={() => handleConfirmLead(lead.id)} disabled={loading}
-                                  className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">Confirma</button>
-                                <button onClick={() => handleRejectLead(lead.id)} disabled={loading}
-                                  className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">Refuza</button>
-                              </>
                             )}
                             {lead.status === LEAD_STATUS.CONFIRMAT && (
                               <>
