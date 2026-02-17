@@ -7,7 +7,7 @@ import {
   deleteMentor,
   deleteClass,
   deleteStudent
-} from '../services/firebaseService';
+} from '../services/supabaseService';
 import { 
   initializeMentorsInFirebase,
   createCompleteClass,

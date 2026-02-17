@@ -7,12 +7,12 @@ import {
   createClass, 
   createStudent, 
   getStudentsByClass
-} from './firebaseService';
+} from './supabaseService';
 
 // ==================== INIȚIALIZARE DATE ====================
 
 /**
- * Inițializează mentorii în Firebase
+ * Inițializează mentorii în Supabase
  */
 export async function initializeMentorsInFirebase() {
   const mentorsData = {
@@ -64,7 +64,7 @@ export async function createCompleteClass(classInfo) {
 
     // 3. Actualizează clasa cu ID-urile studenților
     if (studentIds.length > 0) {
-      const { updateClass } = await import('./firebaseService');
+      const { updateClass } = await import('./supabaseService');
       await updateClass(classId, { studentIds });
     }
 
@@ -102,7 +102,7 @@ export async function getClassStatistics(classId) {
  * Exportă toate datele pentru backup
  */
 export async function exportAllData() {
-  const { getAllMentors, getAllClasses, getAllStudents } = await import('./firebaseService');
+  const { getAllMentors, getAllClasses, getAllStudents } = await import('./supabaseService');
   
   try {
     const [mentors, classes, students] = await Promise.all([
@@ -127,7 +127,7 @@ export async function exportAllData() {
  * Validează consistența datelor
  */
 export async function validateDataConsistency() {
-  const { getAllClasses, getAllStudents, getAllMentors } = await import('./firebaseService');
+  const { getAllClasses, getAllStudents, getAllMentors } = await import('./supabaseService');
   
   const issues = [];
 

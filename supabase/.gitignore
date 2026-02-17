@@ -1,0 +1,7 @@
+# Supabase local development
+.branches
+.temp
+.env.local
+
+# Supabase CLI generated files
+seed.sql

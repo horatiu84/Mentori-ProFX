@@ -1,8 +1,7 @@
 /* eslint-disable no-unused-vars */
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, updateDoc, Timestamp } from 'firebase/firestore';
-import { db } from '../firebase';
+import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import logo from '../logo2.png';
 
@@ -34,17 +33,20 @@ export default function ConfirmWebinar() {
 
       try {
         // Căutăm leadul după token în baza de date
-        const leadRef = doc(db, 'leaduri', token);
-        const leadDoc = await getDoc(leadRef);
+        const { data: leadDoc, error: fetchError } = await supabase
+          .from('leaduri')
+          .select('*')
+          .eq('id', token)
+          .single();
 
-        if (!leadDoc.exists()) {
+        if (fetchError || !leadDoc) {
           setStatus('invalid');
           setError('Link invalid sau expirat');
           setLoading(false);
           return;
         }
 
-        const lead = { id: leadDoc.id, ...leadDoc.data() };
+        const lead = leadDoc;
         setLeadData(lead);
 
         // Verificăm dacă leadul este deja confirmat
@@ -63,11 +65,16 @@ export default function ConfirmWebinar() {
         }
 
         // Actualizăm statusul la CONFIRMAT
-        await updateDoc(leadRef, {
-          status: LEAD_STATUS.CONFIRMAT,
-          dataConfirmare: Timestamp.now(),
-          confirmatPrinLink: true
-        });
+        const { error: updateError } = await supabase
+          .from('leaduri')
+          .update({
+            status: LEAD_STATUS.CONFIRMAT,
+            dataConfirmare: new Date().toISOString(),
+            confirmatPrinLink: true
+          })
+          .eq('id', token);
+
+        if (updateError) throw updateError;
 
         setStatus('success');
         setLoading(false);

@@ -9,7 +9,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          firebase: ['firebase/app', 'firebase/firestore'],
+          supabase: ['@supabase/supabase-js'],
           react: ['react', 'react-dom', 'react-router-dom'],
         },
       },

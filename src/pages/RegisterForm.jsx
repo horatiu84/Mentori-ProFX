@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { collection, addDoc, Timestamp, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import logo from '../logo2.png';
@@ -45,24 +44,24 @@ export default function RegisterForm() {
   const checkDuplicateLead = async (email, telefon) => {
     try {
       // Verificăm dacă există deja un lead cu același email
-      const emailQuery = query(
-        collection(db, 'leaduri'),
-        where('email', '==', email.toLowerCase().trim())
-      );
-      const emailSnapshot = await getDocs(emailQuery);
+      const { data: emailData } = await supabase
+        .from('leaduri')
+        .select('id')
+        .eq('email', email.toLowerCase().trim())
+        .limit(1);
       
-      if (!emailSnapshot.empty) {
+      if (emailData && emailData.length > 0) {
         return { isDuplicate: true, message: 'Acest email este deja înregistrat în sistem!' };
       }
 
       // Verificăm dacă există deja un lead cu același telefon
-      const phoneQuery = query(
-        collection(db, 'leaduri'),
-        where('telefon', '==', telefon.trim())
-      );
-      const phoneSnapshot = await getDocs(phoneQuery);
+      const { data: phoneData } = await supabase
+        .from('leaduri')
+        .select('id')
+        .eq('telefon', telefon.trim())
+        .limit(1);
       
-      if (!phoneSnapshot.empty) {
+      if (phoneData && phoneData.length > 0) {
         return { isDuplicate: true, message: 'Acest număr de telefon este deja înregistrat în sistem!' };
       }
 
@@ -117,25 +116,29 @@ export default function RegisterForm() {
       }
 
       // Adăugăm leadul în baza de date
-      await addDoc(collection(db, 'leaduri'), {
-        nume: formData.nume.trim(),
-        telefon: formData.telefon.trim(),
-        email: formData.email.toLowerCase().trim(),
-        status: LEAD_STATUS.NEALOCAT,
-        mentorAlocat: null,
-        alocareId: null,
-        dataAlocare: null,
-        dataConfirmare: null,
-        dataTimeout: null,
-        emailTrimis: false,
-        dataTrimiereEmail: null,
-        confirmatPrinLink: false,
-        confirmationToken: null,
-        istoricMentori: [],
-        numarReAlocari: 0,
-        observatii: '',
-        createdAt: Timestamp.now()
-      });
+      const { error: insertError } = await supabase
+        .from('leaduri')
+        .insert({
+          nume: formData.nume.trim(),
+          telefon: formData.telefon.trim(),
+          email: formData.email.toLowerCase().trim(),
+          status: LEAD_STATUS.NEALOCAT,
+          mentorAlocat: null,
+          alocareId: null,
+          dataAlocare: null,
+          dataConfirmare: null,
+          dataTimeout: null,
+          emailTrimis: false,
+          dataTrimiereEmail: null,
+          confirmatPrinLink: false,
+          confirmationToken: null,
+          istoricMentori: [],
+          numarReAlocari: 0,
+          observatii: '',
+          createdAt: new Date().toISOString()
+        });
+
+      if (insertError) throw insertError;
 
       setSuccess(true);
       setFormData({ nume: '', telefon: '', email: '' });

@@ -4,7 +4,6 @@ import Mentori1La20 from "./Mentors1la20";
 import ConfirmWebinar from "./pages/ConfirmWebinar";
 import RegisterForm from "./pages/RegisterForm";
 import Login from "./pages/Login";
-import SetupUsers from "./pages/SetupUsers";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
@@ -16,9 +15,6 @@ export default function App() {
         
         {/* Pagina de login pentru mentorii și admin */}
         <Route path="/login" element={<Login />} />
-        
-        {/* Setup inițial pentru crearea utilizatorilor în Firebase */}
-        <Route path="/setup" element={<SetupUsers />} />
         
         {/* Pagina publică de confirmare */}
         <Route path="/confirm/:token" element={<ConfirmWebinar />} />

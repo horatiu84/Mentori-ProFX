@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
+import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import logo from '../logo2.png';
@@ -19,21 +18,22 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Verificăm credențialele în Firestore
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('username', '==', username));
-      const querySnapshot = await getDocs(q);
+      // Verificăm credențialele în Supabase
+      const { data, error: queryError } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
 
-      if (querySnapshot.empty) {
+      if (queryError || !data) {
         setError('Username sau parolă greșită!');
         setLoading(false);
         return;
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      const userData = data;
 
-      // Verificăm parola (în Firestore avem parolele stocate - într-o aplicație reală ar fi hash-uri)
+      // Verificăm parola
       if (userData.password !== password) {
         setError('Username sau parolă greșită!');
         setLoading(false);
