@@ -103,6 +103,41 @@ serve(async (req) => {
     const origin = req.headers.get("origin") || req.headers.get("referer") || "https://profx-mentori.web.app";
     const results: { sent: number; failed: number; errors: Array<{ lead: string; email: string; error: string }> } = { sent: 0, failed: 0, errors: [] };
     const TIMEOUT_6H = 6 * 60 * 60 * 1000;
+    const RATE_LIMIT_DELAY = 600; // 600ms delay = max 1.67 emails/sec (respects 2 req/sec limit)
+    const MAX_RETRIES = 3;
+
+    // Helper function to send email with retry logic
+    const sendEmailWithRetry = async (emailPayload: any, retries = MAX_RETRIES): Promise<Response> => {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          const response = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${RESEND_API_KEY}`,
+            },
+            body: JSON.stringify(emailPayload),
+          });
+
+          // If rate limited (429), wait and retry
+          if (response.status === 429 && attempt < retries) {
+            const retryAfter = response.headers.get("retry-after");
+            const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, attempt) * 1000;
+            console.log(`⏳ Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${retries}...`);
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+            continue;
+          }
+
+          return response;
+        } catch (err) {
+          if (attempt === retries) throw err;
+          const waitTime = Math.pow(2, attempt) * 1000;
+          console.log(`⚠️ Request failed, retrying in ${waitTime}ms...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+        }
+      }
+      throw new Error("Max retries exceeded");
+    };
 
     // Send emails sequentially
     for (const lead of leads) {
@@ -138,66 +173,62 @@ serve(async (req) => {
             '<a href="$1" style="color: #3b82f6;">$1</a>'
           );
 
-        // Send email via Resend API
-        const resendResponse = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${RESEND_API_KEY}`,
-          },
-          body: JSON.stringify({
-            from: "ProFX Mentori <noreply@webinar.profx.ro>",
-            to: [lead.email],
-            reply_to: "support@profx.ro",
-            subject: subject,
-            html: `
-              <!DOCTYPE html>
-              <html lang="ro">
-              <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>${subject}</title>
-              </head>
-              <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
-                <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 0; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                  <!-- Header -->
-                  <div style="text-align: center; padding: 30px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0;">
-                    <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ProFX Mentori</h1>
-                    <p style="color: #e0e7ff; margin: 5px 0 0 0; font-size: 14px;">Programul tău de mentorat trading</p>
-                  </div>
-                  
-                  <!-- Content -->
-                  <div style="padding: 30px 25px; line-height: 1.8; font-size: 15px; color: #333333;">
-                    ${htmlBody}
-                  </div>
-                  
-                  <!-- Footer -->
-                  <div style="padding: 20px 25px; background-color: #f8f9fa; border-top: 1px solid #e0e0e0; border-radius: 0 0 12px 12px;">
-                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #666; text-align: center;">
-                      <strong>ProFX Trading</strong> | Email trimis către ${lead.email}
-                    </p>
-                    <p style="margin: 0; font-size: 12px; color: #999; text-align: center;">
-                      Ai primit acest email deoarece te-ai înscris pentru programul nostru de mentorat 1:20.
-                      <br>
-                      © ${new Date().getFullYear()} ProFX. Toate drepturile rezervate.
-                    </p>
-                    <div style="text-align: center; margin-top: 15px;">
-                      <a href="https://profx.ro" style="color: #667eea; text-decoration: none; font-size: 12px; margin: 0 10px;">Website</a>
-                      <span style="color: #ddd;">|</span>
-                      <a href="mailto:support@profx.ro" style="color: #667eea; text-decoration: none; font-size: 12px; margin: 0 10px;">Contact</a>
-                    </div>
+        // Prepare email payload
+        const emailPayload = {
+          from: "ProFX Mentori <noreply@webinar.profx.ro>",
+          to: [lead.email],
+          reply_to: "support@profx.ro",
+          subject: subject,
+          html: `
+            <!DOCTYPE html>
+            <html lang="ro">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>${subject}</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f4f4f4;">
+              <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 20px auto; padding: 0; background-color: #ffffff; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <!-- Header -->
+                <div style="text-align: center; padding: 30px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0;">
+                  <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">ProFX Mentori</h1>
+                  <p style="color: #e0e7ff; margin: 5px 0 0 0; font-size: 14px;">Programul tău de mentorat trading</p>
+                </div>
+                
+                <!-- Content -->
+                <div style="padding: 30px 25px; line-height: 1.8; font-size: 15px; color: #333333;">
+                  ${htmlBody}
+                </div>
+                
+                <!-- Footer -->
+                <div style="padding: 20px 25px; background-color: #f8f9fa; border-top: 1px solid #e0e0e0; border-radius: 0 0 12px 12px;">
+                  <p style="margin: 0 0 10px 0; font-size: 13px; color: #666; text-align: center;">
+                    <strong>ProFX Trading</strong> | Email trimis către ${lead.email}
+                  </p>
+                  <p style="margin: 0; font-size: 12px; color: #999; text-align: center;">
+                    Ai primit acest email deoarece te-ai înscris pentru programul nostru de mentorat 1:20.
+                    <br>
+                    © ${new Date().getFullYear()} ProFX. Toate drepturile rezervate.
+                  </p>
+                  <div style="text-align: center; margin-top: 15px;">
+                    <a href="https://profx.ro" style="color: #667eea; text-decoration: none; font-size: 12px; margin: 0 10px;">Website</a>
+                    <span style="color: #ddd;">|</span>
+                    <a href="mailto:support@profx.ro" style="color: #667eea; text-decoration: none; font-size: 12px; margin: 0 10px;">Contact</a>
                   </div>
                 </div>
-              </body>
-              </html>
-            `,
-            text: body,
-            tags: [
-              { name: "category", value: "webinar_invitation" },
-              { name: "mentor", value: mentor.nume || "unknown" }
-            ],
-          }),
-        });
+              </div>
+            </body>
+            </html>
+          `,
+          text: body,
+          tags: [
+            { name: "category", value: "webinar_invitation" },
+            { name: "mentor", value: mentor.nume || "unknown" }
+          ],
+        };
+
+        // Send email with retry logic
+        const resendResponse = await sendEmailWithRetry(emailPayload);
 
         if (!resendResponse.ok) {
           const errorData = await resendResponse.json();
@@ -221,8 +252,8 @@ serve(async (req) => {
         results.sent++;
         console.log(`✅ Email sent to ${lead.email} (${lead.nume})`);
 
-        // Small delay between emails to respect rate limits
-        await new Promise((resolve) => setTimeout(resolve, 200));
+        // Delay between emails to respect rate limits (2 requests/second max)
+        await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
       } catch (emailError) {
         results.failed++;
         const errorMessage = emailError instanceof Error ? emailError.message : String(emailError);

@@ -217,6 +217,34 @@ exports.sendBulkEmails = onRequest(
 
       const results = { sent: 0, failed: 0, errors: [] };
       const TIMEOUT_6H = 6 * 60 * 60 * 1000;
+      const RATE_LIMIT_DELAY = 600; // 600ms delay = max 1.67 emails/sec (respects 2 req/sec limit)
+      const MAX_RETRIES = 3;
+
+      // Helper function to send email with retry logic
+      const sendEmailWithRetry = async (emailData, retries = MAX_RETRIES) => {
+        for (let attempt = 0; attempt <= retries; attempt++) {
+          try {
+            const result = await resend.emails.send(emailData);
+            return result;
+          } catch (err) {
+            // Check if it's a rate limit error
+            if (err.statusCode === 429 && attempt < retries) {
+              const waitTime = Math.pow(2, attempt) * 1000;
+              console.log(`⏳ Rate limited, waiting ${waitTime}ms before retry ${attempt + 1}/${retries}...`);
+              await new Promise((resolve) => setTimeout(resolve, waitTime));
+              continue;
+            }
+            // If it's the last attempt or not a rate limit error, throw
+            if (attempt === retries) throw err;
+            
+            // For other errors, wait and retry with exponential backoff
+            const waitTime = Math.pow(2, attempt) * 1000;
+            console.log(`⚠️ Request failed, retrying in ${waitTime}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, waitTime));
+          }
+        }
+        throw new Error("Max retries exceeded");
+      };
 
       for (const lead of leads) {
         try {
@@ -250,7 +278,8 @@ exports.sendBulkEmails = onRequest(
               '<a href="$1" style="color: #3b82f6;">$1</a>'
             );
 
-          await resend.emails.send({
+          // Send email with retry logic
+          await sendEmailWithRetry({
             from: "ProFX Mentori <onboarding@resend.dev>",
             to: [lead.email],
             subject: subject,
@@ -286,8 +315,8 @@ exports.sendBulkEmails = onRequest(
           results.sent++;
           console.log(`✅ Email sent to ${lead.email} (${lead.nume})`);
 
-          // Small delay between emails to respect rate limits
-          await new Promise((resolve) => setTimeout(resolve, 200));
+          // Delay between emails to respect rate limits (2 requests/second max)
+          await new Promise((resolve) => setTimeout(resolve, RATE_LIMIT_DELAY));
         } catch (emailError) {
           results.failed++;
           results.errors.push({
