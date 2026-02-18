@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
 import { formatDate, getStatusBadge, formatTimeRemaining, getTimeUntilTimeout, LEAD_STATUS, MENTOR_PHOTOS } from "../constants";
@@ -20,13 +20,47 @@ export default function MentorDashboard({
   loading, loadingData, error, success, setError, setSuccess,
   // Handlers
   fetchAllData, handleLogout,
-  openDateModal, openEmailPreview,
+  openDateModal,
   handleCompleteLead, handleNoShowLead,
   // Modals
   showDateModal, manualDate, setManualDate, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
-  showEmailPreview, selectedLeadForEmail, emailContent, sendEmail, setShowEmailPreview,
   showModal, modalConfig, closeModal, handleModalConfirm,
 }) {
+  // Countdown timer state
+  const [timeUntilWebinar, setTimeUntilWebinar] = useState(null);
+
+  // Calculate time until webinar
+  useEffect(() => {
+    const calculateTimeRemaining = () => {
+      const webinarDate = mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty;
+      if (!webinarDate) {
+        setTimeUntilWebinar(null);
+        return;
+      }
+
+      const now = new Date();
+      const webinar = new Date(webinarDate);
+      const diff = webinar - now;
+
+      if (diff <= 0) {
+        setTimeUntilWebinar({ isPast: true });
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeUntilWebinar({ days, hours, minutes, seconds, isPast: false });
+    };
+
+    calculateTimeRemaining();
+    const interval = setInterval(calculateTimeRemaining, 1000);
+
+    return () => clearInterval(interval);
+  }, [mentoriData, currentMentorId]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900">
       <div className="max-w-6xl mx-auto pt-10 space-y-6 text-white px-4 pb-10">
@@ -41,8 +75,8 @@ export default function MentorDashboard({
                   <img src={MENTOR_PHOTOS[currentMentorId]} alt={currentMentor} className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-blue-400">Bun ai venit, {currentMentor}! 👋</h1>
-                  <p className="text-gray-400 text-sm">Gestioneaza-ti leadurile cu succes</p>
+                  <h1 className="text-2xl font-bold text-blue-400">Bine ai venit, {currentMentor}! 👋</h1>
+                  <p className="text-gray-400 text-sm">Gestioneaza-ti leadurile </p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -86,7 +120,7 @@ export default function MentorDashboard({
                 <p className="text-sm text-green-300 mb-1">Confirmate</p><p className="text-3xl font-bold text-green-400">{mentorLeaduriConfirmate}</p>
               </div>
               <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/30 p-4 rounded-xl text-center">
-                <p className="text-sm text-purple-300 mb-1">Complete</p><p className="text-3xl font-bold text-purple-400">{mentorLeaduriComplete}</p>
+                <p className="text-sm text-purple-300 mb-1">Prezenți</p><p className="text-3xl font-bold text-purple-400">{mentorLeaduriComplete}</p>
               </div>
               <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/30 p-4 rounded-xl text-center">
                 <p className="text-sm text-red-300 mb-1">Neconfirmate</p><p className="text-3xl font-bold text-red-400">{mentorLeaduriNeconfirmate}</p>
@@ -119,30 +153,66 @@ export default function MentorDashboard({
           <CardContent className="p-6">
             <h2 className="text-xl font-bold text-purple-400 mb-4">🎓 Webinar 1:20</h2>
             <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/30 p-6 rounded-xl">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  {mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty ? (
-                    <>
+              {mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
                       <p className="text-sm text-gray-300 mb-2">Următorul webinar programat:</p>
                       <p className="text-2xl font-bold text-purple-400">{formatDate(mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty)}</p>
-                      <p className="text-sm text-gray-400 mt-2">Asigură-te că ești pregătit pentru sesiune!</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm text-gray-300 mb-2">Nu ai un webinar programat încă</p>
-                      <p className="text-lg font-bold text-yellow-400">Setează data pentru următorul webinar</p>
-                      <p className="text-sm text-gray-400 mt-2">Planifică-ți sesiunea 1:20 cu leadurile tale</p>
-                    </>
+                    </div>
+                    <div>
+                      <button onClick={() => openDateModal(currentMentorId)} disabled={loading}
+                        className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2">
+                        <span>📅</span>
+                        Modifică Data
+                      </button>
+                    </div>
+                  </div>
+                  {timeUntilWebinar && !timeUntilWebinar.isPast && (
+                    <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-400/40 rounded-xl p-6">
+                      <p className="text-center text-sm text-gray-300 mb-4">⏱️ Timp rămas până la webinar</p>
+                      <div className="grid grid-cols-4 gap-4">
+                        <div className="bg-gray-800/50 border border-blue-400/30 rounded-lg p-4 text-center">
+                          <div className="text-3xl font-bold text-blue-400">{timeUntilWebinar.days}</div>
+                          <div className="text-xs text-gray-400 mt-1">Zile</div>
+                        </div>
+                        <div className="bg-gray-800/50 border border-purple-400/30 rounded-lg p-4 text-center">
+                          <div className="text-3xl font-bold text-purple-400">{timeUntilWebinar.hours}</div>
+                          <div className="text-xs text-gray-400 mt-1">Ore</div>
+                        </div>
+                        <div className="bg-gray-800/50 border border-pink-400/30 rounded-lg p-4 text-center">
+                          <div className="text-3xl font-bold text-pink-400">{timeUntilWebinar.minutes}</div>
+                          <div className="text-xs text-gray-400 mt-1">Minute</div>
+                        </div>
+                        <div className="bg-gray-800/50 border border-cyan-400/30 rounded-lg p-4 text-center">
+                          <div className="text-3xl font-bold text-cyan-400">{timeUntilWebinar.seconds}</div>
+                          <div className="text-xs text-gray-400 mt-1">Secunde</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {timeUntilWebinar?.isPast && (
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 text-center">
+                      <p className="text-yellow-400 font-semibold">⚠️ Webinarul a început sau s-a terminat!</p>
+                    </div>
                   )}
                 </div>
-                <div>
-                  <button onClick={() => openDateModal(currentMentorId)} disabled={loading}
-                    className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2">
-                    <span>📅</span>
-                    {mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty ? 'Modifica Data' : 'Seteaza Data'}
-                  </button>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-300 mb-2">Nu ai un webinar programat încă</p>
+                    <p className="text-lg font-bold text-yellow-400">Setează data pentru următorul webinar</p>
+                    <p className="text-sm text-gray-400 mt-2">Planifică-ți sesiunea 1:20 cu leadurile tale</p>
+                  </div>
+                  <div>
+                    <button onClick={() => openDateModal(currentMentorId)} disabled={loading}
+                      className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2">
+                      <span>📅</span>
+                      Setează Data
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -199,16 +269,10 @@ export default function MentorDashboard({
                             {lead.numarReAlocari > 0 && <p className="text-xs text-yellow-400">Re-alocat de {lead.numarReAlocari} ori</p>}
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            {(lead.status === LEAD_STATUS.ALOCAT || lead.status === LEAD_STATUS.CONFIRMAT) && (
-                              <button onClick={() => openEmailPreview(lead)} disabled={loading}
-                                className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 flex items-center gap-2">
-                                <span>✉️</span> Email
-                              </button>
-                            )}
                             {lead.status === LEAD_STATUS.CONFIRMAT && (
                               <>
                                 <button onClick={() => handleCompleteLead(lead.id)} disabled={loading}
-                                  className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">Complet</button>
+                                  className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">Prezent</button>
                                 <button onClick={() => handleNoShowLead(lead.id)} disabled={loading}
                                   className="bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 px-4 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">No-Show</button>
                               </>
@@ -291,68 +355,6 @@ export default function MentorDashboard({
                 className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-2 px-4 rounded-xl font-semibold transition-all">Confirma</button>
               <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-2 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Email Preview Modal */}
-      {showEmailPreview && selectedLeadForEmail && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                <span>✉️</span> Preview Email
-              </h3>
-              <button onClick={() => setShowEmailPreview(false)} className="text-gray-400 hover:text-white text-2xl">&times;</button>
-            </div>
-            
-            <div className="bg-gray-800/50 rounded-xl p-4 mb-4 border border-gray-700/50">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-full bg-blue-500/20 border-2 border-blue-500/50 flex items-center justify-center overflow-hidden">
-                  <img src={MENTOR_PHOTOS[currentMentorId]} alt={currentMentor} className="w-full h-full object-cover" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-400">Catre:</p>
-                  <p className="text-white font-semibold">{selectedLeadForEmail.nume} ({selectedLeadForEmail.email})</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Subiect:</label>
-                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3">
-                  <p className="text-white font-semibold">{emailContent.subject}</p>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Mesaj:</label>
-                <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4">
-                  <pre className="text-gray-300 whitespace-pre-wrap font-sans text-sm leading-relaxed">{emailContent.body}</pre>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-4 border-t border-gray-700/50">
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4">
-                <p className="text-xs text-yellow-300">
-                  <span className="font-semibold">⚠️ Notă:</span> Funcția de trimitere email este în dezvoltare. Deocamdată, emailul va fi doar afișat în consolă.
-                </p>
-              </div>
-              <div className="flex gap-3">
-                <button onClick={() => setShowEmailPreview(false)}
-                  className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-3 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
-                <button onClick={sendEmail} disabled={loading}
-                  className="flex-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 py-3 px-4 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
-                  {loading ? 'Se trimite...' : (
-                    <>
-                      <span>📤</span> Trimite Email
-                    </>
-                  )}
-                </button>
-              </div>
             </div>
           </div>
         </div>

@@ -2,7 +2,14 @@ export const formatDate = (val) => {
   if (!val) return "N/A";
   try {
     // Supabase returns ISO strings for timestamptz
-    return new Date(val).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' });
+    return new Date(val).toLocaleString('ro-RO', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Europe/Bucharest'
+    });
   } catch {
     return "N/A";
   }
@@ -79,7 +86,7 @@ export const getStatusBadge = (status) => {
     case LEAD_STATUS.NO_SHOW:
       return { bg: 'bg-orange-500/20 border-orange-500/50 text-orange-300', label: 'No-Show' };
     case LEAD_STATUS.COMPLET:
-      return { bg: 'bg-purple-500/20 border-purple-500/50 text-purple-300', label: 'Complet' };
+      return { bg: 'bg-purple-500/20 border-purple-500/50 text-purple-300', label: 'Prezent' };
     default:
       return { bg: 'bg-gray-500/20 border-gray-500/50 text-gray-300', label: status };
   }

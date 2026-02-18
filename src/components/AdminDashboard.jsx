@@ -32,7 +32,7 @@ export default function AdminDashboard({
   // Lead edit
   editingLead, editLeadData, setEditLeadData,
   handleEditLead, handleSaveEditLead, handleCancelEdit,
-  handleCompleteLead, handleNoShowLead, handleReallocateLead, handleDeleteLead,
+  handleReallocateLead, handleDeleteLead,
   // Modals
   showDateModal, manualDate, setManualDate, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showAdminEmailModal, selectedMentorForEmail, setShowAdminEmailModal,
@@ -110,7 +110,7 @@ export default function AdminDashboard({
                 <p className="text-3xl font-bold text-red-400">{leaduriNeconfirmate}</p>
               </div>
               <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/30 p-4 rounded-xl text-center">
-                <p className="text-sm text-purple-300 mb-1">Complete</p>
+                <p className="text-sm text-purple-300 mb-1">Prezenți</p>
                 <p className="text-3xl font-bold text-purple-400">{leaduriComplete}</p>
               </div>
             </div>
@@ -180,7 +180,7 @@ export default function AdminDashboard({
                         <div className="flex justify-between"><span className="text-gray-400">Total:</span><span className="text-white font-bold">{mentor.leaduriAlocate || 0}</span></div>
                         <div className="flex justify-between"><span className="text-blue-400">Alocate:</span><span className="text-blue-400 font-bold">{leaduri.filter(l => l.mentorAlocat === mentor.id && l.status === LEAD_STATUS.ALOCAT).length}</span></div>
                         <div className="flex justify-between"><span className="text-green-400">Confirmate:</span><span className="text-green-400 font-bold">{leaduri.filter(l => l.mentorAlocat === mentor.id && l.status === LEAD_STATUS.CONFIRMAT).length}</span></div>
-                        <div className="flex justify-between"><span className="text-purple-400">Complete:</span><span className="text-purple-400 font-bold">{leaduri.filter(l => l.mentorAlocat === mentor.id && l.status === LEAD_STATUS.COMPLET).length}</span></div>
+                        <div className="flex justify-between"><span className="text-purple-400">Prezenți:</span><span className="text-purple-400 font-bold">{leaduri.filter(l => l.mentorAlocat === mentor.id && l.status === LEAD_STATUS.COMPLET).length}</span></div>
                       </div>
                       <div className="mt-2">
                         <span className={"inline-block px-3 py-1 rounded-full text-xs font-semibold border " + (mentor.available ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-gray-500/20 border-gray-500/50 text-gray-400')}>
@@ -491,14 +491,6 @@ export default function AdminDashboard({
                                 </div>
                               ) : (
                                 <div className="flex flex-col gap-1.5">
-                                  {lead.status === LEAD_STATUS.CONFIRMAT && (
-                                    <div className="flex gap-1">
-                                      <button onClick={() => handleCompleteLead(lead.id)} disabled={loading} title="Complet"
-                                        className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">Complet</button>
-                                      <button onClick={() => handleNoShowLead(lead.id)} disabled={loading} title="No-Show"
-                                        className="bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">No-Show</button>
-                                    </div>
-                                  )}
                                   {(lead.status === LEAD_STATUS.NECONFIRMAT || lead.status === LEAD_STATUS.NO_SHOW) && (
                                     <button onClick={() => handleReallocateLead(lead.id)} disabled={loading}
                                       className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">Re-aloca</button>
@@ -583,7 +575,12 @@ export default function AdminDashboard({
                 </div>
                 <div>
                   <p className="text-white font-semibold">{selectedMentorForEmail.nume}</p>
-                  <p className="text-sm text-gray-400">{leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT)).length} leaduri active</p>
+                  <p className="text-sm text-gray-400">
+                    {leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && l.status === LEAD_STATUS.ALOCAT).length} leaduri vor primi email
+                    {leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && l.status === LEAD_STATUS.CONFIRMAT).length > 0 && (
+                      <span className="text-green-400"> • {leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && l.status === LEAD_STATUS.CONFIRMAT).length} deja confirmate</span>
+                    )}
+                  </p>
                 </div>
               </div>
             </div>
@@ -595,31 +592,45 @@ export default function AdminDashboard({
                   <li><strong className="text-white">Subiect:</strong> Invitație Webinar 1:20 - ProFX</li>
                   <li><strong className="text-white">Data webinar:</strong> {formatDate(selectedMentorForEmail.ultimulOneToTwenty)}</li>
                   <li><strong className="text-white">Mentor:</strong> {selectedMentorForEmail.nume}</li>
-                  <li><strong className="text-white">Destinatari:</strong> Toate leadurile alocate și confirmate</li>
+                  <li><strong className="text-white">Destinatari:</strong> Doar leadurile cu status ALOCAT (neconfirmate)</li>
+                  <li className="text-yellow-300 text-xs">⚠️ Leadurile confirmate nu vor primi email (au confirmat deja prezența)</li>
                 </ul>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-400 mb-2">Leaduri care vor primi email:</label>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Leaduri:</label>
                 <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-4 max-h-48 overflow-y-auto">
                   <div className="space-y-2">
                     {leaduri
                       .filter(l => l.mentorAlocat === selectedMentorForEmail.id && (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT))
-                      .map(lead => (
-                        <button
-                          key={lead.id}
-                          onClick={() => showBulkEmailPreview(lead)}
-                          className="w-full flex items-center justify-between py-2 px-3 bg-gray-700/30 hover:bg-gray-700/50 rounded-lg transition-all cursor-pointer group"
-                        >
-                          <div className="text-left">
-                            <p className="text-white text-sm font-semibold group-hover:text-blue-300 transition-colors">{lead.nume}</p>
-                            <p className="text-gray-400 text-xs">{lead.email}</p>
-                          </div>
-                          <span className={"px-2 py-1 text-xs font-semibold rounded-full " + getStatusBadge(lead.status).bg}>
-                            {getStatusBadge(lead.status).label}
-                          </span>
-                        </button>
-                      ))}
+                      .map(lead => {
+                        const isConfirmed = lead.status === LEAD_STATUS.CONFIRMAT;
+                        return (
+                          <button
+                            key={lead.id}
+                            onClick={() => !isConfirmed && showBulkEmailPreview(lead)}
+                            className={`w-full flex items-center justify-between py-2 px-3 rounded-lg transition-all ${
+                              isConfirmed 
+                                ? 'bg-green-900/20 border border-green-500/30 opacity-60 cursor-not-allowed' 
+                                : 'bg-gray-700/30 hover:bg-gray-700/50 cursor-pointer group'
+                            }`}
+                            disabled={isConfirmed}
+                          >
+                            <div className="text-left">
+                              <p className={`text-sm font-semibold ${
+                                isConfirmed ? 'text-green-300' : 'text-white group-hover:text-blue-300'
+                              } transition-colors`}>{lead.nume} {isConfirmed && '✓'}</p>
+                              <p className="text-gray-400 text-xs">{lead.email}</p>
+                              {isConfirmed && (
+                                <p className="text-green-400 text-xs mt-1">🚫 Deja confirmat - nu va primi email</p>
+                              )}
+                            </div>
+                            <span className={"px-2 py-1 text-xs font-semibold rounded-full " + getStatusBadge(lead.status).bg}>
+                              {getStatusBadge(lead.status).label}
+                            </span>
+                          </button>
+                        );
+                      })}
                   </div>
                 </div>
               </div>
@@ -653,19 +664,15 @@ export default function AdminDashboard({
             </div>
 
             <div className="mt-6 pt-4 border-t border-gray-700/50">
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-3 mb-4">
-                <p className="text-xs text-yellow-300">
-                  <span className="font-semibold">⚠️ Notă:</span> Funcția de trimitere email este în dezvoltare. Deocamdată, emailurile vor fi doar afișate în consolă.
-                </p>
-              </div>
               <div className="flex gap-3">
                 <button onClick={() => setShowAdminEmailModal(false)}
                   className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-3 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
-                <button onClick={sendBulkEmail} disabled={loading}
+                <button onClick={sendBulkEmail} disabled={loading || leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && l.status === LEAD_STATUS.ALOCAT).length === 0}
                   className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-3 px-4 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                   {loading ? 'Se trimite...' : (
                     <>
-                      <span>📤</span> Trimite Email ({leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT)).length})
+                      <span>📤</span> Trimite Email ({leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && l.status === LEAD_STATUS.ALOCAT).length})
+                      {leaduri.filter(l => l.mentorAlocat === selectedMentorForEmail.id && l.status === LEAD_STATUS.ALOCAT).length === 0 && ' - Niciun lead disponibil'}
                     </>
                   )}
                 </button>

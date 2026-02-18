@@ -67,12 +67,12 @@ serve(async (req) => {
       );
     }
 
-    // Fetch all active leads for this mentor
+    // Fetch only ALOCAT leads for this mentor (not CONFIRMAT, as they already confirmed)
     const { data: leads, error: leadsError } = await supabase
       .from("leaduri")
       .select("*")
       .eq("mentorAlocat", mentorId)
-      .in("status", ["alocat", "confirmat"]);
+      .eq("status", "alocat");
 
     if (leadsError) {
       return new Response(
@@ -96,7 +96,6 @@ serve(async (req) => {
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
-      second: "2-digit",
       timeZone: "Europe/Bucharest"
     });
 

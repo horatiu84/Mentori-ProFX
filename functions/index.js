@@ -67,7 +67,6 @@ exports.sendEmail = onRequest(
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
-        second: "2-digit",
       });
 
       // Build confirmation link
@@ -209,7 +208,6 @@ exports.sendBulkEmails = onRequest(
         year: "numeric",
         hour: "2-digit",
         minute: "2-digit",
-        second: "2-digit",
       });
 
       const origin = req.headers.origin || req.headers.referer || "https://profx-mentori.web.app";

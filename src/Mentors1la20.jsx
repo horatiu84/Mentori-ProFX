@@ -42,9 +42,6 @@ export default function Mentori1La20() {
   const [mentorSearchQuery, setMentorSearchQuery] = useState('');
   const [mentorSortBy, setMentorSortBy] = useState('data-desc');
   const [mentorCurrentPage, setMentorCurrentPage] = useState(1);
-  const [showEmailPreview, setShowEmailPreview] = useState(false);
-  const [selectedLeadForEmail, setSelectedLeadForEmail] = useState(null);
-  const [emailContent, setEmailContent] = useState({ subject: '', body: '' });
   const [showAdminEmailModal, setShowAdminEmailModal] = useState(false);
   const [selectedMentorForEmail, setSelectedMentorForEmail] = useState(null);
   const [bulkEmailPreview, setBulkEmailPreview] = useState(null);
@@ -823,61 +820,6 @@ Contact:
     return { subject, body };
   };
 
-  const openEmailPreview = (lead) => {
-    const content = generateEmailContent(lead);
-    if (content) {
-      setEmailContent(content);
-      setSelectedLeadForEmail(lead);
-      setShowEmailPreview(true);
-    }
-  };
-
-  const sendEmail = async () => {
-    if (!selectedLeadForEmail) return;
-    
-    setLoading(true);
-    try {
-      console.log('Trimitere email catre:', selectedLeadForEmail.email);
-      
-      // Call Supabase Edge Function to send email via Resend
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(
-        `${supabaseUrl}/functions/v1/send-email`,
-        {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({
-            leadId: selectedLeadForEmail.id,
-            mentorId: currentMentorId
-          })
-        }
-      );
-      
-      const result = await response.json();
-      
-      console.log('Response status:', response.status);
-      console.log('Response result:', result);
-      
-      if (!response.ok) {
-        console.error('Error details:', result);
-        throw new Error(result.error || result.details || result.message || 'Eroare la trimiterea emailului');
-      }
-      
-      await fetchLeaduri();
-      setSuccess(`Email trimis cu succes catre ${selectedLeadForEmail.nume}! Countdown 6h a început.`);
-      setShowEmailPreview(false);
-      setSelectedLeadForEmail(null);
-    } catch (err) {
-      console.error('Eroare trimitere email:', err);
-      setError('Eroare la trimiterea emailului: ' + (err.message || ''));
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const openAdminEmailModal = (mentorId) => {
     const mentor = mentoriData.find(m => m.id === mentorId);
     if (!mentor) return;
@@ -887,8 +829,14 @@ Contact:
       return;
     }
     
-    if ((mentor.leaduriAlocate || 0) < 2) {
-      setError('Mentorul trebuie sa aiba minim 2 leaduri pentru a trimite email!');
+    // Check if mentor has at least 2 leads (ALOCAT or CONFIRMAT)
+    const totalLeaduri = leaduri.filter(l => 
+      l.mentorAlocat === mentorId && 
+      (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT)
+    ).length;
+    
+    if (totalLeaduri < 2) {
+      setError('Mentorul trebuie sa aiba minim 2 leaduri pentru a accesa modalul de email!');
       return;
     }
     
@@ -910,9 +858,10 @@ Contact:
     
     setLoading(true);
     try {
+      // Only send emails to ALOCAT leads (not CONFIRMAT, as they already confirmed)
       const mentorLeads = leaduri.filter(l => 
         l.mentorAlocat === selectedMentorForEmail.id && 
-        (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT)
+        l.status === LEAD_STATUS.ALOCAT
       );
       
       if (mentorLeads.length === 0) {
@@ -1376,7 +1325,6 @@ Contact:
         manualLead={manualLead} setManualLead={setManualLead} handleAddManualLead={handleAddManualLead}
         editingLead={editingLead} editLeadData={editLeadData} setEditLeadData={setEditLeadData}
         handleEditLead={handleEditLead} handleSaveEditLead={handleSaveEditLead} handleCancelEdit={handleCancelEdit}
-        handleCompleteLead={handleCompleteLead} handleNoShowLead={handleNoShowLead}
         handleReallocateLead={handleReallocateLead} handleDeleteLead={handleDeleteLead}
         showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
         handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}
@@ -1411,13 +1359,11 @@ Contact:
       mentorIndexOfLast={mentorIndexOfLast} leaduriPerPage={leaduriPerPage}
       loading={loading} loadingData={loadingData} error={error} success={success} setError={setError} setSuccess={setSuccess}
       fetchAllData={fetchAllData} handleLogout={handleLogout}
-      openDateModal={openDateModal} openEmailPreview={openEmailPreview}
+      openDateModal={openDateModal}
       handleCompleteLead={handleCompleteLead} handleNoShowLead={handleNoShowLead}
       showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
       handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}
       selectedMentorForDate={selectedMentorForDate} setSelectedMentorForDate={setSelectedMentorForDate}
-      showEmailPreview={showEmailPreview} selectedLeadForEmail={selectedLeadForEmail}
-      emailContent={emailContent} sendEmail={sendEmail} setShowEmailPreview={setShowEmailPreview}
       showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
     />
   );
