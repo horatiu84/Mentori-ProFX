@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import logo from '../logo2.png';
@@ -18,29 +17,30 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Verificăm credențialele în Supabase
-      const { data, error: queryError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .single();
+      // Call authentication Edge Function (secure - doesn't expose users table)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/authenticate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({ username, password })
+        }
+      );
 
-      if (queryError || !data) {
-        setError('Username sau parolă greșită!');
-        setLoading(false);
-        return;
-      }
+      const result = await response.json();
 
-      const userData = data;
-
-      // Verificăm parola
-      if (userData.password !== password) {
-        setError('Username sau parolă greșită!');
+      if (!response.ok) {
+        setError(result.error || 'Username sau parolă greșită!');
         setLoading(false);
         return;
       }
 
       // Autentificare reușită - salvăm datele în localStorage
+      const userData = result.user;
       localStorage.setItem('isAuthenticated', 'true');
       localStorage.setItem('currentUser', userData.username);
       localStorage.setItem('currentRole', userData.role);
