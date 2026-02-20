@@ -47,22 +47,22 @@ export default function AdminDashboard({
 
         {/* Header */}
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <img src={logo} alt="ProFX Logo" className="h-12 w-auto" />
+          <CardContent className="p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <img src={logo} alt="ProFX Logo" className="h-10 w-auto" />
                 <div>
-                  <h1 className="text-2xl font-bold text-purple-400">Admin - Gestionare Leaduri</h1>
-                  <p className="text-gray-400 text-sm">Panou complet de administrare</p>
+                  <h1 className="text-lg md:text-2xl font-bold text-purple-400">Admin - Gestionare Leaduri</h1>
+                  <p className="text-gray-400 text-xs md:text-sm">Panou complet de administrare</p>
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2 self-end sm:self-auto">
                 <button onClick={fetchAllData} disabled={loadingData}
-                  className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-4 py-2 rounded-xl transition-all text-sm">
-                  {loadingData ? 'Se incarca...' : 'Refresh'}
+                  className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-2 rounded-xl transition-all text-sm">
+                  {loadingData ? '...' : 'Refresh'}
                 </button>
                 <button onClick={handleLogout}
-                  className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-6 py-2 rounded-xl transition-all">
+                  className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-2 rounded-xl transition-all text-sm">
                   Logout
                 </button>
               </div>
@@ -133,22 +133,22 @@ export default function AdminDashboard({
         {/* Mentori */}
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-6">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
               <h2 className="text-xl font-bold text-blue-400">Mentori ({mentoriUnici.length})</h2>
               <div className="flex gap-2">
                 {mentoriData.length > 5 && (
                   <button onClick={stergeMentoriDuplicati} disabled={loading}
-                    className="bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 px-4 py-2 rounded-xl text-sm transition-all">
+                    className="bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/50 text-orange-300 px-3 py-2 rounded-xl text-xs md:text-sm transition-all">
                     Sterge Duplicati
                   </button>
                 )}
                 <button onClick={resetMentori}
-                  className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 px-4 py-2 rounded-xl text-sm transition-all">
+                  className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 px-3 py-2 rounded-xl text-xs md:text-sm transition-all">
                   Reset
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
               {mentoriUnici
                 .sort((a, b) => a.ordineCoada - b.ordineCoada)
                 .map((mentor, index) => (
@@ -354,13 +354,13 @@ export default function AdminDashboard({
                   return dateB - dateA;
                 }).map((alocare) => (
                   <div key={alocare.id} className="border border-gray-700/50 rounded-xl p-4 bg-gray-800/30 hover:bg-gray-800/50 transition-all">
-                    <div className="flex justify-between items-start">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div>
                         <h4 className="font-semibold text-lg text-blue-300">{alocare.mentorNume}</h4>
                         <p className="text-sm text-gray-400">{alocare.numarLeaduri} leaduri alocate</p>
                         <p className="text-xs text-gray-500">{formatDate(alocare.createdAt)}</p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button onClick={() => dezalocaLeaduriMentor(alocare)} disabled={loading}
                           className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 px-3 py-1.5 rounded-lg text-sm transition-all disabled:opacity-50">
                           Dezalocare
@@ -415,21 +415,17 @@ export default function AdminDashboard({
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-6">
             <h2 className="text-xl font-bold text-blue-400 mb-4">Toate Leadurile ({leaduri.length})</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="md:col-span-2">
-                <Input type="text" placeholder="Cauta dupa nume, telefon sau email..." value={searchQuery}
-                  onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-                  className="w-full p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500" />
-              </div>
-              <div>
-                <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white">
-                  <option value="data-desc">Data (Nou &rarr; Vechi)</option>
-                  <option value="data-asc">Data (Vechi &rarr; Nou)</option>
-                  <option value="nume-asc">Nume (A &rarr; Z)</option>
-                  <option value="nume-desc">Nume (Z &rarr; A)</option>
-                </select>
-              </div>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <Input type="text" placeholder="Cauta dupa nume, telefon sau email..." value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="flex-1 p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500" />
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                className="p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white sm:w-48">
+                <option value="data-desc">Data (Nou → Vechi)</option>
+                <option value="data-asc">Data (Vechi → Nou)</option>
+                <option value="nume-asc">Nume (A → Z)</option>
+                <option value="nume-desc">Nume (Z → A)</option>
+              </select>
             </div>
             {leaduri.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
@@ -440,7 +436,75 @@ export default function AdminDashboard({
               <div className="text-center py-12 text-gray-400"><p className="text-lg">Nu s-au gasit rezultate</p></div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                {/* Mobile card layout */}
+                <div className="block md:hidden space-y-3">
+                  {leaduriCurente.map((lead, index) => {
+                    const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                    const isEd = editingLead === lead.id;
+                    const badge = getStatusBadge(lead.status);
+                    return (
+                      <div key={lead.id} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs text-gray-500">#{indexOfFirstLead + index + 1}</span>
+                              {isEd
+                                ? <Input type="text" value={editLeadData.nume} onChange={(e) => setEditLeadData({...editLeadData, nume: e.target.value})} className="flex-1 p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm" />
+                                : <span className="font-bold text-white text-sm">{lead.nume}</span>
+                              }
+                            </div>
+                            <div className="mt-1 space-y-1">
+                              {isEd ? (
+                                <>
+                                  <Input type="tel" value={editLeadData.telefon} onChange={(e) => setEditLeadData({...editLeadData, telefon: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm" placeholder="Telefon" />
+                                  <Input type="email" value={editLeadData.email} onChange={(e) => setEditLeadData({...editLeadData, email: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm" placeholder="Email" />
+                                </>
+                              ) : (
+                                <>
+                                  <p className="text-xs text-gray-300">{lead.telefon}</p>
+                                  <p className="text-xs text-gray-400 truncate">{lead.email}</p>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span className={"px-2 py-1 text-xs font-semibold rounded-full border " + badge.bg}>{badge.label}</span>
+                            {lead.status === LEAD_STATUS.ALOCAT && lead.dataAlocare && (
+                              <span className="text-xs text-gray-400">{formatTimeRemaining(getTimeUntilTimeout(lead))}</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-700/30">
+                          <span>{mentorInfo ? mentorInfo.nume : '-'}</span>
+                          <span>{formatDate(lead.createdAt)}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {isEd ? (
+                            <>
+                              <button onClick={() => handleSaveEditLead(lead.id)} disabled={loading}
+                                className="flex-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Salveaza</button>
+                              <button onClick={handleCancelEdit}
+                                className="flex-1 bg-gray-500/20 hover:bg-gray-500/30 border border-gray-500/50 text-gray-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Anuleaza</button>
+                            </>
+                          ) : (
+                            <>
+                              {(lead.status === LEAD_STATUS.NECONFIRMAT || lead.status === LEAD_STATUS.NO_SHOW) && (
+                                <button onClick={() => handleReallocateLead(lead.id)} disabled={loading}
+                                  className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Re-aloca</button>
+                              )}
+                              <button onClick={() => handleEditLead(lead)} disabled={loading}
+                                className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Edit</button>
+                              <button onClick={() => handleDeleteLead(lead)} disabled={loading}
+                                className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Sterge</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Desktop table layout */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-700/50">
                     <thead className="bg-gray-900/50">
                       <tr>
@@ -511,22 +575,22 @@ export default function AdminDashboard({
                   </table>
                 </div>
                 {totalPages > 1 && (
-                  <div className="mt-6 flex items-center justify-between">
-                    <div className="text-sm text-gray-400">{indexOfFirstLead + 1} - {Math.min(indexOfLastLead, leaduriSortate.length)} din {leaduriSortate.length}</div>
-                    <div className="flex gap-2">
+                  <div className="mt-6 flex items-center justify-between gap-2">
+                    <div className="text-xs md:text-sm text-gray-400">{indexOfFirstLead + 1}-{Math.min(indexOfLastLead, leaduriSortate.length)} / {leaduriSortate.length}</div>
+                    <div className="flex gap-1 md:gap-2">
                       <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                        className={"px-4 py-2 rounded-xl font-semibold transition-all border " + (currentPage === 1 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Anterior</button>
+                        className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (currentPage === 1 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>‹ Ant</button>
                       <div className="flex gap-1">
                         {[...Array(totalPages)].map((_, i) => {
                           const p = i + 1;
                           if (p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1))
-                            return <button key={p} onClick={() => setCurrentPage(p)} className={"px-4 py-2 rounded-xl font-semibold transition-all border " + (currentPage === p ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 hover:bg-gray-700/30 border-gray-600/50 text-gray-400')}>{p}</button>;
-                          if (p === currentPage - 2 || p === currentPage + 2) return <span key={p} className="px-2 py-2 text-gray-500">...</span>;
+                            return <button key={p} onClick={() => setCurrentPage(p)} className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (currentPage === p ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 hover:bg-gray-700/30 border-gray-600/50 text-gray-400')}>{p}</button>;
+                          if (p === currentPage - 2 || p === currentPage + 2) return <span key={p} className="px-1 py-2 text-gray-500 text-sm">…</span>;
                           return null;
                         })}
                       </div>
                       <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                        className={"px-4 py-2 rounded-xl font-semibold transition-all border " + (currentPage === totalPages ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Urmator</button>
+                        className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (currentPage === totalPages ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Urm ›</button>
                     </div>
                   </div>
                 )}

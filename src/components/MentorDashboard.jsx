@@ -67,25 +67,25 @@ export default function MentorDashboard({
 
         {/* Header */}
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <img src={logo} alt="ProFX Logo" className="h-12 w-auto" />
-                <div className="w-16 h-16 rounded-full border-2 border-blue-500/50 overflow-hidden shadow-lg">
+          <CardContent className="p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <img src={logo} alt="ProFX Logo" className="h-10 w-auto" />
+                <div className="w-12 h-12 rounded-full border-2 border-blue-500/50 overflow-hidden shadow-lg shrink-0">
                   <img src={MENTOR_PHOTOS[currentMentorId]} alt={currentMentor} className="w-full h-full object-cover" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-blue-400">Bine ai venit, {currentMentor}! 👋</h1>
-                  <p className="text-gray-400 text-sm">Gestioneaza-ti leadurile </p>
+                  <h1 className="text-base md:text-2xl font-bold text-blue-400">Bine ai venit, {currentMentor}! 👋</h1>
+                  <p className="text-gray-400 text-xs md:text-sm">Gestioneaza-ti leadurile</p>
                 </div>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2 self-end sm:self-auto">
                 <button onClick={fetchAllData} disabled={loadingData}
-                  className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-4 py-2 rounded-xl transition-all text-sm">
-                  {loadingData ? 'Se incarca...' : 'Refresh'}
+                  className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-2 rounded-xl transition-all text-sm">
+                  {loadingData ? '...' : 'Refresh'}
                 </button>
                 <button onClick={handleLogout}
-                  className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-6 py-2 rounded-xl transition-all">
+                  className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-2 rounded-xl transition-all text-sm">
                   Logout
                 </button>
               </div>
@@ -155,37 +155,38 @@ export default function MentorDashboard({
             <div className="bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/30 p-6 rounded-xl">
               {mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty ? (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-300 mb-2">Următorul webinar programat:</p>
-                      <p className="text-2xl font-bold text-purple-400">{formatDate(mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty)}</p>
+                      <p className="text-xl md:text-2xl font-bold text-purple-400 break-words">{formatDate(mentoriData.find(m => m.id === currentMentorId)?.ultimulOneToTwenty)}</p>
                     </div>
-                    <div>
+                    <div className="shrink-0">
                       <button onClick={() => openDateModal(currentMentorId)} disabled={loading}
-                        className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2">
+                        className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-4 py-2 rounded-xl font-semibold transition-all flex items-center gap-2 text-sm">
                         <span>📅</span>
-                        Modifică Data
+                        <span className="hidden sm:inline">Modifică Data</span>
+                        <span className="sm:hidden">Edit</span>
                       </button>
                     </div>
                   </div>
                   {timeUntilWebinar && !timeUntilWebinar.isPast && (
                     <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-400/40 rounded-xl p-6">
                       <p className="text-center text-sm text-gray-300 mb-4">⏱️ Timp rămas până la webinar</p>
-                      <div className="grid grid-cols-4 gap-4">
-                        <div className="bg-gray-800/50 border border-blue-400/30 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-blue-400">{timeUntilWebinar.days}</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-gray-800/50 border border-blue-400/30 rounded-lg p-3 text-center">
+                          <div className="text-2xl md:text-3xl font-bold text-blue-400">{timeUntilWebinar.days}</div>
                           <div className="text-xs text-gray-400 mt-1">Zile</div>
                         </div>
-                        <div className="bg-gray-800/50 border border-purple-400/30 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-purple-400">{timeUntilWebinar.hours}</div>
+                        <div className="bg-gray-800/50 border border-purple-400/30 rounded-lg p-3 text-center">
+                          <div className="text-2xl md:text-3xl font-bold text-purple-400">{timeUntilWebinar.hours}</div>
                           <div className="text-xs text-gray-400 mt-1">Ore</div>
                         </div>
-                        <div className="bg-gray-800/50 border border-pink-400/30 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-pink-400">{timeUntilWebinar.minutes}</div>
+                        <div className="bg-gray-800/50 border border-pink-400/30 rounded-lg p-3 text-center">
+                          <div className="text-2xl md:text-3xl font-bold text-pink-400">{timeUntilWebinar.minutes}</div>
                           <div className="text-xs text-gray-400 mt-1">Minute</div>
                         </div>
-                        <div className="bg-gray-800/50 border border-cyan-400/30 rounded-lg p-4 text-center">
-                          <div className="text-3xl font-bold text-cyan-400">{timeUntilWebinar.seconds}</div>
+                        <div className="bg-gray-800/50 border border-cyan-400/30 rounded-lg p-3 text-center">
+                          <div className="text-2xl md:text-3xl font-bold text-cyan-400">{timeUntilWebinar.seconds}</div>
                           <div className="text-xs text-gray-400 mt-1">Secunde</div>
                         </div>
                       </div>
@@ -198,17 +199,18 @@ export default function MentorDashboard({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-300 mb-2">Nu ai un webinar programat încă</p>
-                    <p className="text-lg font-bold text-yellow-400">Setează data pentru următorul webinar</p>
+                    <p className="text-base md:text-lg font-bold text-yellow-400">Setează data pentru următorul webinar</p>
                     <p className="text-sm text-gray-400 mt-2">Planifică-ți sesiunea 1:20 cu leadurile tale</p>
                   </div>
-                  <div>
+                  <div className="shrink-0">
                     <button onClick={() => openDateModal(currentMentorId)} disabled={loading}
-                      className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2">
+                      className="bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 px-4 py-2 rounded-xl font-semibold transition-all flex items-center gap-2 text-sm">
                       <span>📅</span>
-                      Setează Data
+                      <span className="hidden sm:inline">Setează Data</span>
+                      <span className="sm:hidden">Seteaza</span>
                     </button>
                   </div>
                 </div>
@@ -221,22 +223,18 @@ export default function MentorDashboard({
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-6">
             <h2 className="text-xl font-bold text-blue-400 mb-4">Leadurile Mele ({mentorLeaduri.length})</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="md:col-span-2">
-                <Input type="text" placeholder="Cauta dupa nume, telefon sau email..." value={mentorSearchQuery}
-                  onChange={(e) => { setMentorSearchQuery(e.target.value); setMentorCurrentPage(1); }}
-                  className="w-full p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500" />
-              </div>
-              <div>
-                <select value={mentorSortBy} onChange={(e) => setMentorSortBy(e.target.value)}
-                  className="w-full p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white">
-                  <option value="data-desc">Data (Nou &rarr; Vechi)</option>
-                  <option value="data-asc">Data (Vechi &rarr; Nou)</option>
-                  <option value="status">Dupa Status</option>
-                  <option value="nume-asc">Nume (A &rarr; Z)</option>
-                  <option value="nume-desc">Nume (Z &rarr; A)</option>
-                </select>
-              </div>
+            <div className="flex flex-col sm:flex-row gap-3 mb-4">
+              <Input type="text" placeholder="Cauta dupa nume, telefon sau email..." value={mentorSearchQuery}
+                onChange={(e) => { setMentorSearchQuery(e.target.value); setMentorCurrentPage(1); }}
+                className="flex-1 p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500" />
+              <select value={mentorSortBy} onChange={(e) => setMentorSortBy(e.target.value)}
+                className="p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white sm:w-48">
+                <option value="data-desc">Data (Nou → Vechi)</option>
+                <option value="data-asc">Data (Vechi → Nou)</option>
+                <option value="status">Dupa Status</option>
+                <option value="nume-asc">Nume (A → Z)</option>
+                <option value="nume-desc">Nume (Z → A)</option>
+              </select>
             </div>
             {mentorLeaduri.length === 0 ? (
               <div className="text-center py-12 text-gray-400">
@@ -254,16 +252,16 @@ export default function MentorDashboard({
                       <div key={lead.id} className="bg-gray-800/30 rounded-xl border border-gray-700/50 p-4 hover:border-blue-500/30 transition-all">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                           <div className="flex-1 space-y-2">
-                            <div className="flex items-center gap-3">
-                              <h3 className="text-lg font-bold text-white">{lead.nume}</h3>
+                            <div className="flex items-start gap-3 flex-wrap">
+                              <h3 className="text-base md:text-lg font-bold text-white">{lead.nume}</h3>
                               <span className={"px-3 py-1 text-xs font-semibold rounded-full border " + badge.bg}>{badge.label}</span>
                               {lead.status === LEAD_STATUS.ALOCAT && lead.dataAlocare && (
                                 <span className="text-xs text-gray-400">{formatTimeRemaining(getTimeUntilTimeout(lead))}</span>
                               )}
                             </div>
-                            <div className="flex flex-wrap gap-4 text-sm text-gray-300">
+                            <div className="flex flex-wrap gap-2 md:gap-4 text-xs md:text-sm text-gray-300">
                               <span>Tel: {lead.telefon}</span>
-                              <span>Email: {lead.email}</span>
+                              <span className="break-all">Email: {lead.email}</span>
                               <span className="text-gray-500">Adaugat: {formatDate(lead.createdAt)}</span>
                             </div>
                             {lead.numarReAlocari > 0 && <p className="text-xs text-yellow-400">Re-alocat de {lead.numarReAlocari} ori</p>}
@@ -287,22 +285,22 @@ export default function MentorDashboard({
                   })}
                 </div>
                 {mentorTotalPages > 1 && (
-                  <div className="mt-6 flex items-center justify-between">
-                    <div className="text-sm text-gray-400">{mentorIndexOfFirst + 1} - {Math.min(mentorIndexOfLast, mentorLeaduriSortate.length)} din {mentorLeaduriSortate.length}</div>
-                    <div className="flex gap-2">
+                  <div className="mt-6 flex items-center justify-between gap-2">
+                    <div className="text-xs md:text-sm text-gray-400">{mentorIndexOfFirst + 1}-{Math.min(mentorIndexOfLast, mentorLeaduriSortate.length)} / {mentorLeaduriSortate.length}</div>
+                    <div className="flex gap-1 md:gap-2">
                       <button onClick={() => setMentorCurrentPage(p => Math.max(1, p - 1))} disabled={mentorCurrentPage === 1}
-                        className={"px-4 py-2 rounded-xl font-semibold transition-all border " + (mentorCurrentPage === 1 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Anterior</button>
+                        className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (mentorCurrentPage === 1 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>‹ Ant</button>
                       <div className="flex gap-1">
                         {[...Array(mentorTotalPages)].map((_, i) => {
                           const p = i + 1;
                           if (p === 1 || p === mentorTotalPages || (p >= mentorCurrentPage - 1 && p <= mentorCurrentPage + 1))
-                            return <button key={p} onClick={() => setMentorCurrentPage(p)} className={"px-4 py-2 rounded-xl font-semibold transition-all border " + (mentorCurrentPage === p ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 hover:bg-gray-700/30 border-gray-600/50 text-gray-400')}>{p}</button>;
-                          if (p === mentorCurrentPage - 2 || p === mentorCurrentPage + 2) return <span key={p} className="px-2 py-2 text-gray-500">...</span>;
+                            return <button key={p} onClick={() => setMentorCurrentPage(p)} className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (mentorCurrentPage === p ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 hover:bg-gray-700/30 border-gray-600/50 text-gray-400')}>{p}</button>;
+                          if (p === mentorCurrentPage - 2 || p === mentorCurrentPage + 2) return <span key={p} className="px-1 py-2 text-gray-500 text-sm">…</span>;
                           return null;
                         })}
                       </div>
                       <button onClick={() => setMentorCurrentPage(p => Math.min(mentorTotalPages, p + 1))} disabled={mentorCurrentPage === mentorTotalPages}
-                        className={"px-4 py-2 rounded-xl font-semibold transition-all border " + (mentorCurrentPage === mentorTotalPages ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Urmator</button>
+                        className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (mentorCurrentPage === mentorTotalPages ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Urm ›</button>
                     </div>
                   </div>
                 )}
