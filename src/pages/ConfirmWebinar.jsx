@@ -5,6 +5,14 @@ import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import logo from '../logo2.png';
 
+const ZOOM_LINKS = {
+  sergiu: { url: 'https://us02web.zoom.us/j/88481338630', meetingId: '884 8133 8630', passcode: '2026' },
+  eli:    { url: 'https://us06web.zoom.us/j/86056241761', meetingId: '860 5624 1761', passcode: 'Eli' },
+  dan:    { url: 'https://us06web.zoom.us/j/84497687444', meetingId: '844 9768 7444', passcode: 'Dan' },
+  tudor:  { url: 'https://us06web.zoom.us/j/84059943113', meetingId: '840 5994 3113', passcode: 'Tudor' },
+  adrian: null,
+};
+
 const LEAD_STATUS = {
   NEALOCAT: 'nealocat',
   ALOCAT: 'alocat',
@@ -18,7 +26,7 @@ export default function ConfirmWebinar() {
   const { token } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState('loading'); // loading, success, error, already-confirmed, invalid
+  const [status, setStatus] = useState('loading'); // loading, success, error, already-confirmed, expired, invalid
   const [leadData, setLeadData] = useState(null);
   const [error, setError] = useState('');
 
@@ -52,6 +60,14 @@ export default function ConfirmWebinar() {
         // Verificăm dacă leadul este deja confirmat
         if (lead.status === LEAD_STATUS.CONFIRMAT) {
           setStatus('already-confirmed');
+          setLoading(false);
+          return;
+        }
+
+        // Verificăm dacă link-ul a expirat (lead resetat la nealocat sau timeout depășit)
+        const isTimedOut = lead.dataTimeout && new Date() > new Date(lead.dataTimeout);
+        if (lead.status === LEAD_STATUS.NEALOCAT || isTimedOut) {
+          setStatus('expired');
           setLoading(false);
           return;
         }
@@ -126,14 +142,57 @@ export default function ConfirmWebinar() {
                   <strong className="text-blue-400">📞 Telefon:</strong> {leadData?.telefon}
                 </p>
               </div>
-              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
-                <p className="text-yellow-300 text-sm">
-                  ℹ️ Vei primi detalii despre webinar și linkul de participare pe email cu 30 de minute înainte de start.
-                </p>
-              </div>
+              {(() => {
+                const zoom = ZOOM_LINKS[leadData?.mentorAlocat];
+                return zoom ? (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mb-6 text-left">
+                    <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
+                    <a
+                      href={zoom.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
+                    >
+                      {zoom.url}
+                    </a>
+                    <p className="text-gray-400 text-sm text-center">
+                      Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
+                      &nbsp;&nbsp;|&nbsp;&nbsp;
+                      Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
+                    </p>
+                    <p className="text-yellow-300 text-sm text-center mt-3 font-medium">
+                      ⚠️ Nu uita să-ți salvezi linkul de Zoom și parola!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
+                    <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
+                  </div>
+                );
+              })()}
               <p className="text-gray-400 text-sm">
                 Te așteptăm cu drag la webinar! 🚀
               </p>
+            </div>
+          )}
+
+          {/* Expired */}
+          {status === 'expired' && (
+            <div className="text-center py-8">
+              <div className="bg-orange-500/20 border border-orange-500/50 rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-6">
+                <svg className="w-10 h-10 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h1 className="text-3xl font-bold text-orange-400 mb-4">Link Expirat ⏰</h1>
+              <p className="text-gray-300 text-lg mb-6">
+                Ne pare rău, {leadData?.nume}! Termenul de confirmare de <strong className="text-white">6 ore</strong> a expirat.
+              </p>
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-5 mb-6">
+                <p className="text-orange-200 text-sm leading-relaxed">
+                  Locul tău a fost eliberat și va fi reallocat. Te rog să aștepți o nouă alocare din partea mentorului tău — vei primi un nou email de invitație.
+                </p>
+              </div>
             </div>
           )}
 
@@ -149,11 +208,39 @@ export default function ConfirmWebinar() {
               <p className="text-gray-300 text-lg mb-6">
                 Bună, {leadData?.nume}! Participarea ta la webinar a fost deja confirmată anterior.
               </p>
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-4">
                 <p className="text-gray-300 text-sm">
                   Nu este nevoie să confirmi din nou. Te așteptăm la webinar! 🎯
                 </p>
               </div>
+              {(() => {
+                const zoom = ZOOM_LINKS[leadData?.mentorAlocat];
+                return zoom ? (
+                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 text-left">
+                    <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
+                    <a
+                      href={zoom.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
+                    >
+                      {zoom.url}
+                    </a>
+                    <p className="text-gray-400 text-sm text-center">
+                      Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
+                      &nbsp;&nbsp;|&nbsp;&nbsp;
+                      Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
+                    </p>
+                    <p className="text-yellow-300 text-sm text-center mt-3 font-medium">
+                      ⚠️ Nu uita să-ți salvezi linkul de Zoom și parola!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+                    <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

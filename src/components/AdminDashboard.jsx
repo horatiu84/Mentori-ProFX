@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React from "react";
+import React, { useState } from "react";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
 import { formatDate, getStatusBadge, formatTimeRemaining, getTimeUntilTimeout, LEAD_STATUS, MENTORI_DISPONIBILI, MENTOR_PHOTOS } from "../constants";
@@ -23,7 +23,7 @@ export default function AdminDashboard({
   alocaLeaduriAutomata, canAllocateLeads, stergeLeaduri, exportToExcel,
   alocaLeaduriManual, showManualAllocModal, setShowManualAllocModal,
   manualAllocMentor, setManualAllocMentor, manualAllocCount, setManualAllocCount,
-  dezalocaLeaduriMentor, stergeLaeduriMentor,
+  dezalocaLeaduriMentor, dezalocaLeadSingular, stergeLaeduriMentor,
   selectedMentor, setSelectedMentor,
   // Upload
   showUploadForm, setShowUploadForm, uploadMode, setUploadMode,
@@ -34,7 +34,7 @@ export default function AdminDashboard({
   handleEditLead, handleSaveEditLead, handleCancelEdit,
   handleReallocateLead, handleDeleteLead,
   // Modals
-  showDateModal, manualDate, setManualDate, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
+  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showAdminEmailModal, selectedMentorForEmail, setShowAdminEmailModal,
   bulkEmailPreview, setBulkEmailPreview, showBulkEmailPreview, sendBulkEmail,
   emailTemplate, showEmailTemplateEditor, editingTemplate, setEditingTemplate,
@@ -183,9 +183,13 @@ export default function AdminDashboard({
                         <div className="flex justify-between"><span className="text-purple-400">Prezenți:</span><span className="text-purple-400 font-bold">{leaduri.filter(l => l.mentorAlocat === mentor.id && l.status === LEAD_STATUS.COMPLET).length}</span></div>
                       </div>
                       <div className="mt-2">
-                        <span className={"inline-block px-3 py-1 rounded-full text-xs font-semibold border " + (mentor.available ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-gray-500/20 border-gray-500/50 text-gray-400')}>
-                          {mentor.available ? 'Available' : 'Busy'}
-                        </span>
+                        {mentor.available ? (
+                          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold border bg-green-500/20 border-green-500/50 text-green-300">✅ Disponibil</span>
+                        ) : (
+                          <span className={"inline-block px-3 py-1 rounded-full text-xs font-semibold border " + (mentor.manuallyDisabled ? 'bg-red-500/20 border-red-500/50 text-red-300' : (mentor.leaduriAlocate || 0) >= 30 ? 'bg-orange-500/20 border-orange-500/50 text-orange-300' : 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300')}>
+                            {mentor.manuallyDisabled ? '🔴 Dezactivat manual' : (mentor.leaduriAlocate || 0) >= 30 ? '🔶 Complet (30/30)' : '🔵 În Program'}
+                          </span>
+                        )}
                       </div>
                       <div className="mt-2">
                         {mentor.ultimulOneToTwenty ? (
@@ -385,6 +389,7 @@ export default function AdminDashboard({
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Telefon</th>
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Email</th>
                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
+                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Actiuni</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-700/30">
@@ -396,6 +401,10 @@ export default function AdminDashboard({
                                     <td className="px-4 py-2 text-sm text-white">{l.telefon}</td>
                                     <td className="px-4 py-2 text-sm text-gray-300">{l.email || '-'}</td>
                                     <td className="px-4 py-2 text-sm"><span className={"px-2 py-1 text-xs font-semibold rounded-full border " + badge.bg}>{badge.label}</span></td>
+                                    <td className="px-4 py-2 text-sm">
+                                      <button onClick={() => dezalocaLeadSingular(l)} disabled={loading}
+                                        className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all disabled:opacity-50">Dezalocare</button>
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -472,6 +481,16 @@ export default function AdminDashboard({
                             {lead.status === LEAD_STATUS.ALOCAT && lead.dataAlocare && (
                               <span className="text-xs text-gray-400">{formatTimeRemaining(getTimeUntilTimeout(lead))}</span>
                             )}
+                            {lead.prezenta1 != null && (
+                              <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta1 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>
+                                S1 {lead.prezenta1 ? '✅' : '❌'}
+                              </span>
+                            )}
+                            {lead.prezenta2 != null && (
+                              <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>
+                                S2 {lead.prezenta2 ? '✅' : '❌'}
+                              </span>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-700/30">
@@ -541,6 +560,16 @@ export default function AdminDashboard({
                                 {lead.status === LEAD_STATUS.ALOCAT && lead.dataAlocare && (
                                   <span className="text-xs text-gray-400 text-center">{formatTimeRemaining(getTimeUntilTimeout(lead))}</span>
                                 )}
+                                {lead.prezenta1 != null && (
+                                  <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta1 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>
+                                    S1 {lead.prezenta1 ? '✅' : '❌'}
+                                  </span>
+                                )}
+                                {lead.prezenta2 != null && (
+                                  <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>
+                                    S2 {lead.prezenta2 ? '✅' : '❌'}
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
@@ -604,17 +633,24 @@ export default function AdminDashboard({
       {showDateModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-white mb-4">📅 Seteaza Data Webinar 1:20</h3>
-            <p className="text-sm text-gray-400 mb-4">Alege data și ora pentru webinarul mentorului</p>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-300 mb-2">Data și Ora:</label>
-              <Input type="datetime-local" value={manualDate} onChange={(e) => setManualDate(e.target.value)}
-                className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+            <h3 className="text-xl font-bold text-white mb-4">📅 Seteaza Date Webinar 1:20</h3>
+            <p className="text-sm text-gray-400 mb-4">Alege datele și orele pentru sesiunile mentorului</p>
+            <div className="grid grid-cols-1 gap-4 mb-5">
+              <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-3">
+                <label className="block text-sm font-semibold text-purple-300 mb-2">📅 Sesiunea 1 *</label>
+                <Input type="datetime-local" value={manualDate} onChange={(e) => setManualDate(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+              </div>
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3">
+                <label className="block text-sm font-semibold text-blue-300 mb-2">📅 Sesiunea 2 <span className="text-xs text-gray-400 font-normal">(opțional)</span></label>
+                <Input type="datetime-local" value={manualDate2} onChange={(e) => setManualDate2(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+              </div>
             </div>
             <div className="flex gap-3">
               <button onClick={handleConfirmDate} disabled={loading}
                 className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-2 px-4 rounded-xl font-semibold transition-all">Confirma</button>
-              <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); }}
+              <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-2 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
             </div>
           </div>
@@ -778,6 +814,9 @@ export default function AdminDashboard({
                 <div className="bg-gray-800/50 rounded-lg p-2">
                   <code className="text-yellow-300">{'{{email}}'}</code> - Email-ul leadului
                 </div>
+                <div className="bg-gray-800/50 rounded-lg p-2">
+                  <code className="text-yellow-300">{'{{zoomLink}}'}</code> - Link Zoom webinar
+                </div>
               </div>
               <p className="text-xs text-gray-400 mt-3">
                 Aceste variabile vor fi înlocuite automat cu datele reale când se trimite emailul.
@@ -841,29 +880,66 @@ export default function AdminDashboard({
               
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-2">
+                  <label className="block text-sm font-semibold text-gray-300 mb-3">
                     Selectează Mentor
                   </label>
-                  <select
-                    value={manualAllocMentor}
-                    onChange={(e) => setManualAllocMentor(e.target.value)}
-                    className="w-full bg-gray-800/50 border border-gray-600/50 text-white px-4 py-3 rounded-xl focus:outline-none focus:border-teal-500/50 transition-all"
-                  >
-                    <option value="">-- Alege un mentor --</option>
+                  {/* Mentor disponibili */}
+                  <div className="grid grid-cols-1 gap-2 mb-3">
                     {mentoriUnici
-                      .filter(m => (m.leaduriAlocate || 0) < 30)
+                      .filter(m => m.available)
                       .sort((a, b) => a.ordineCoada - b.ordineCoada)
                       .map(mentor => {
                         const leadCnt = mentor.leaduriAlocate || 0;
                         const mentorInfo = MENTORI_DISPONIBILI.find(mDef => mDef.id === mentor.id);
                         const mentorNume = mentorInfo ? mentorInfo.nume : mentor.nume;
+                        const isSelected = manualAllocMentor === mentor.id;
                         return (
-                          <option key={mentor.id} value={mentor.id}>
-                            {mentorNume} ({leadCnt}/30 leaduri)
-                          </option>
+                          <button
+                            key={mentor.id}
+                            type="button"
+                            onClick={() => setManualAllocMentor(isSelected ? '' : mentor.id)}
+                            className={"w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left " + (isSelected ? 'border-teal-500/70 bg-teal-500/15' : 'border-gray-600/40 bg-gray-800/40 hover:border-teal-600/50 hover:bg-gray-700/40')}
+                          >
+                            <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-gray-600/50 shrink-0">
+                              <img src={MENTOR_PHOTOS[mentor.id]} alt={mentorNume} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className={"font-semibold text-sm " + (isSelected ? 'text-teal-300' : 'text-white')}>{mentorNume}</span>
+                                <span className="text-xs text-gray-400">{leadCnt}/30</span>
+                              </div>
+                              <div className="w-full bg-gray-700/50 rounded-full h-1.5">
+                                <div className={"h-1.5 rounded-full transition-all " + (leadCnt <= 20 ? 'bg-gradient-to-r from-teal-500 to-cyan-400' : 'bg-gradient-to-r from-orange-500 to-red-500')} style={{width: Math.min((leadCnt/30)*100, 100)+'%'}} />
+                              </div>
+                            </div>
+                            <span className="text-xs px-2 py-0.5 rounded-full border bg-green-500/20 border-green-500/50 text-green-300 shrink-0">✓ Liber</span>
+                            {isSelected && <span className="text-teal-400 text-lg shrink-0">✓</span>}
+                          </button>
                         );
                       })}
-                  </select>
+                  </div>
+                  {/* Mentori in program */}
+                  {mentoriUnici.some(m => !m.available) && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">În Program — Indisponibili</p>
+                      {mentoriUnici
+                        .filter(m => !m.available)
+                        .sort((a, b) => a.ordineCoada - b.ordineCoada)
+                        .map(mentor => {
+                          const mentorInfo = MENTORI_DISPONIBILI.find(mDef => mDef.id === mentor.id);
+                          const mentorNume = mentorInfo ? mentorInfo.nume : mentor.nume;
+                          return (
+                            <div key={mentor.id} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-700/30 bg-gray-800/20 opacity-50 cursor-not-allowed">
+                              <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-gray-700/50 shrink-0 grayscale">
+                                <img src={MENTOR_PHOTOS[mentor.id]} alt={mentorNume} className="w-full h-full object-cover" />
+                              </div>
+                              <span className="text-sm text-gray-500 font-medium">{mentorNume}</span>
+                              <span className="ml-auto text-xs px-2 py-0.5 rounded-full border bg-cyan-500/10 border-cyan-500/30 text-cyan-500">🔵 În Program</span>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
                 </div>
 
                 <div>

@@ -37,7 +37,11 @@ export const LEAD_STATUS = {
   CONFIRMAT: 'confirmat',
   NECONFIRMAT: 'neconfirmat',
   NO_SHOW: 'no_show',
-  COMPLET: 'complet'
+  COMPLET: 'complet',
+  IN_PROGRAM: 'in_program',
+  COMPLET_2_SESIUNI: 'complet_2_sesiuni',
+  COMPLET_SESIUNE_FINALA: 'complet_sesiune_finala',
+  COMPLET_SESIUNE_1: 'complet_sesiune_1',
 };
 
 export const ONE_TO_TWENTY_STATUS = {
@@ -87,6 +91,14 @@ export const getStatusBadge = (status) => {
       return { bg: 'bg-orange-500/20 border-orange-500/50 text-orange-300', label: 'No-Show' };
     case LEAD_STATUS.COMPLET:
       return { bg: 'bg-purple-500/20 border-purple-500/50 text-purple-300', label: 'Prezent' };
+    case LEAD_STATUS.IN_PROGRAM:
+      return { bg: 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300', label: 'În Program' };
+    case LEAD_STATUS.COMPLET_2_SESIUNI:
+      return { bg: 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300', label: 'Complet 2 Sesiuni' };
+    case LEAD_STATUS.COMPLET_SESIUNE_FINALA:
+      return { bg: 'bg-teal-500/20 border-teal-500/50 text-teal-300', label: 'Complet S. Finală' };
+    case LEAD_STATUS.COMPLET_SESIUNE_1:
+      return { bg: 'bg-indigo-500/20 border-indigo-500/50 text-indigo-300', label: 'Complet S. 1' };
     default:
       return { bg: 'bg-gray-500/20 border-gray-500/50 text-gray-300', label: status };
   }

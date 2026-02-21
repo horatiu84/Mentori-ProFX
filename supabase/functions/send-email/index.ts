@@ -11,6 +11,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Zoom links per mentor
+const ZOOM_LINKS: Record<string, string> = {
+  sergiu: "https://us02web.zoom.us/j/88481338630\nMeeting ID: 884 8133 8630 | Passcode: 2026",
+  eli: "https://us06web.zoom.us/j/86056241761\nMeeting ID: 860 5624 1761 | Passcode: Eli",
+  dan: "https://us06web.zoom.us/j/84497687444\nMeeting ID: 844 9768 7444 | Passcode: Dan",
+  tudor: "https://us06web.zoom.us/j/84059943113\nMeeting ID: 840 5994 3113 | Passcode: Tudor",
+  adrian: "În curând",
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -104,6 +113,7 @@ const replacements: Record<string, string> = {
           "{{confirmationLink}}": confirmationLink,
           "{{telefon}}": lead.telefon || "",
           "{{email}}": lead.email || "",
+          "{{zoomLink}}": ZOOM_LINKS[mentor.id] || "",
         };
 
         let subject = template.subject || "Invitatie Webinar 1:20 - ProFX";
