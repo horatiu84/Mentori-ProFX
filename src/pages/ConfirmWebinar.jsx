@@ -134,36 +134,32 @@ export default function ConfirmWebinar() {
               <p className="text-gray-300 text-lg mb-6">
                 Mulțumim, {leadData?.nume}! Participarea ta la webinarul 1:20 ProFX a fost confirmată cu succes.
               </p>
-              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-6 mb-6">
-                <p className="text-gray-300 mb-3">
-                  <strong className="text-blue-400">📧 Email:</strong> {leadData?.email}
-                </p>
-                <p className="text-gray-300">
-                  <strong className="text-blue-400">📞 Telefon:</strong> {leadData?.telefon}
-                </p>
-              </div>
               {(() => {
                 const zoom = ZOOM_LINKS[leadData?.mentorAlocat];
                 return zoom ? (
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mb-6 text-left">
-                    <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
-                    <a
-                      href={zoom.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
-                    >
-                      {zoom.url}
-                    </a>
-                    <p className="text-gray-400 text-sm text-center">
-                      Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
-                      &nbsp;&nbsp;|&nbsp;&nbsp;
-                      Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
-                    </p>
-                    <p className="text-yellow-300 text-sm text-center mt-3 font-medium">
-                      ⚠️ Nu uita să-ți salvezi linkul de Zoom și parola!
-                    </p>
-                  </div>
+                  <>
+                    <div className="bg-yellow-500/20 border-2 border-yellow-400/70 rounded-xl p-5 mb-4">
+                      <p className="text-yellow-300 text-xl font-bold text-center">
+                        ⚠️ IMPORTANT: Salvează linkul de Zoom și parola!
+                      </p>
+                    </div>
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mb-6 text-left">
+                      <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
+                      <a
+                        href={zoom.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
+                      >
+                        {zoom.url}
+                      </a>
+                      <p className="text-gray-400 text-sm text-center">
+                        Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
+                        &nbsp;&nbsp;|&nbsp;&nbsp;
+                        Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
+                      </p>
+                    </div>
+                  </>
                 ) : (
                   <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
                     <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
@@ -190,7 +186,7 @@ export default function ConfirmWebinar() {
               </p>
               <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-5 mb-6">
                 <p className="text-orange-200 text-sm leading-relaxed">
-                  Locul tău a fost eliberat și va fi reallocat. Te rog să aștepți o nouă alocare din partea mentorului tău — vei primi un nou email de invitație.
+                  Locul tău a fost eliberat și va fi realocat. Te rog să aștepți o nouă alocare din partea mentorului tău — vei primi un nou email de invitație.
                 </p>
               </div>
             </div>
@@ -216,25 +212,32 @@ export default function ConfirmWebinar() {
               {(() => {
                 const zoom = ZOOM_LINKS[leadData?.mentorAlocat];
                 return zoom ? (
-                  <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 text-left">
-                    <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
-                    <a
-                      href={zoom.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
-                    >
-                      {zoom.url}
-                    </a>
-                    <p className="text-gray-400 text-sm text-center">
-                      Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
-                      &nbsp;&nbsp;|&nbsp;&nbsp;
-                      Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
-                    </p>
-                    <p className="text-yellow-300 text-sm text-center mt-3 font-medium">
-                      ⚠️ Nu uita să-ți salvezi linkul de Zoom și parola!
-                    </p>
-                  </div>
+                  <>
+                    <div className="bg-yellow-500/20 border-2 border-yellow-400/70 rounded-xl p-5 mb-4">
+                      <p className="text-yellow-300 text-xl font-bold text-center">
+                        ⚠️ IMPORTANT: Salvează linkul de Zoom și parola acum!
+                      </p>
+                      <p className="text-yellow-200 text-sm text-center mt-2">
+                        Fără link și parolă nu vei putea intra în webinar!
+                      </p>
+                    </div>
+                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 text-left">
+                      <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
+                      <a
+                        href={zoom.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
+                      >
+                        {zoom.url}
+                      </a>
+                      <p className="text-gray-400 text-sm text-center">
+                        Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
+                        &nbsp;&nbsp;|&nbsp;&nbsp;
+                        Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
+                      </p>
+                    </div>
+                  </>
                 ) : (
                   <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
                     <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
