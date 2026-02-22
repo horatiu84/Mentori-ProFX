@@ -49,6 +49,11 @@ export default function Mentori1La20() {
   const [emailTemplate, setEmailTemplate] = useState(null);
   const [showEmailTemplateEditor, setShowEmailTemplateEditor] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState({ subject: '', body: '' });
+  const [vipEmailTemplate, setVipEmailTemplate] = useState(null);
+  const [showVipEmailTemplateEditor, setShowVipEmailTemplateEditor] = useState(false);
+  const [editingVipTemplate, setEditingVipTemplate] = useState({ subject: '', body: '' });
+  const [showVipEmailModal, setShowVipEmailModal] = useState(false);
+  const [vipEmailPreview, setVipEmailPreview] = useState(null);
   const [showManualAllocModal, setShowManualAllocModal] = useState(false);
   const [manualAllocMentor, setManualAllocMentor] = useState('');
   const [manualAllocCount, setManualAllocCount] = useState('');
@@ -248,9 +253,64 @@ Contact:
     }
   };
 
+  const fetchVipEmailTemplate = async () => {
+    try {
+      const { data: templateDoc, error: tplErr } = await supabase
+        .from("settings").select("*").eq("id", "vipEmailTemplate").single();
+      if (!tplErr && templateDoc) {
+        setVipEmailTemplate(templateDoc);
+      } else {
+        const defaultVipTemplate = {
+          id: "vipEmailTemplate",
+          subject: "Ofertă VIP Exclusivă – ProFX Premium 💎",
+          body: `Buna ziua {{nume}},
+
+🎓 Felicitări pentru parcurgerea programului ProFX!
+
+Acum că ai finalizat sesiunile, te invităm să faci următorul pas în cariera ta de trader cu accesul la Programul VIP ProFX — conceput special pentru traders dedicați.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💎 ACCES VIP — DOAR 20€/LUNĂ
+
+Ce primești:
+
+📈 MINIM 4 sesiuni de trading LIVE zilnic
+   • Scalping / Day Trading / Swing
+
+💡 Idei de intrări zilnice – Entry, SL, TP pe Gold și Forex
+
+🎓 Cursuri GRATUITE – Începători & Avansați
+
+🧠 Cursuri Psihologie & Dezvoltare Personală
+
+🤝 Affiliate Partnerships
+
+📊 Acces la sesiuni de Macroeconomie
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💰 Investiția ta: doar 20€/lună
+
+Nu rata această oportunitate de a face parte din comunitatea noastră VIP.
+
+Contactează-ne pentru a-ți rezerva locul!
+
+Cu respect,
+Echipa ProFX`,
+          createdAt: new Date().toISOString()
+        };
+        await supabase.from("settings").upsert(defaultVipTemplate);
+        setVipEmailTemplate(defaultVipTemplate);
+      }
+    } catch (err) {
+      console.error("Eroare fetch VIP email template:", err);
+    }
+  };
+
   const fetchAllData = useCallback(async () => {
     setLoadingData(true);
-    await Promise.all([fetchMentori(), fetchLeaduri(), fetchAlocari(), fetchEmailTemplate()]);
+    await Promise.all([fetchMentori(), fetchLeaduri(), fetchAlocari(), fetchEmailTemplate(), fetchVipEmailTemplate()]);
     setLoadingData(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -853,14 +913,11 @@ Contact:
       return;
     }
     
-    // Check if mentor has at least 2 leads (ALOCAT or CONFIRMAT)
-    const totalLeaduri = leaduri.filter(l => 
-      l.mentorAlocat === mentorId && 
-      (l.status === LEAD_STATUS.ALOCAT || l.status === LEAD_STATUS.CONFIRMAT)
-    ).length;
+    // Check if mentor has at least 1 lead assigned (send button in modal is disabled if none ALOCAT)
+    const totalLeaduri = leaduri.filter(l => l.mentorAlocat === mentorId).length;
     
-    if (totalLeaduri < 2) {
-      setError('Mentorul trebuie sa aiba minim 2 leaduri pentru a accesa modalul de email!');
+    if (totalLeaduri === 0) {
+      setError('Mentorul nu are niciun lead alocat!');
       return;
     }
     
@@ -954,6 +1011,100 @@ Contact:
     setShowEmailTemplateEditor(true);
   };
 
+  const openVipEmailTemplateEditor = () => {
+    if (vipEmailTemplate) {
+      setEditingVipTemplate({
+        subject: vipEmailTemplate.subject,
+        body: vipEmailTemplate.body
+      });
+    }
+    setShowVipEmailTemplateEditor(true);
+  };
+
+  const saveVipEmailTemplate = async () => {
+    if (!editingVipTemplate.subject || !editingVipTemplate.body) {
+      setError('Te rog completează subiectul și conținutul email-ului VIP!');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { error: upsertErr } = await supabase.from("settings").upsert({
+        id: "vipEmailTemplate",
+        subject: editingVipTemplate.subject,
+        body: editingVipTemplate.body,
+        updatedAt: new Date().toISOString()
+      });
+      if (upsertErr) throw upsertErr;
+      await fetchVipEmailTemplate();
+      setShowVipEmailTemplateEditor(false);
+      setError('');
+      setSuccess('Template-ul VIP a fost actualizat cu succes!');
+    } catch (err) {
+      console.error('Eroare la salvarea template-ului VIP:', err);
+      setSuccess('');
+      setError('Eroare la salvarea template-ului VIP: ' + (err.message || JSON.stringify(err)));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateVipEmailContent = (lead) => {
+    if (!vipEmailTemplate) {
+      setError('Template-ul VIP nu este încărcat!');
+      return null;
+    }
+    const replacements = { '{{nume}}': lead.nume || '' };
+    let subject = vipEmailTemplate.subject;
+    let body = vipEmailTemplate.body;
+    Object.keys(replacements).forEach(placeholder => {
+      const regex = new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g');
+      subject = subject.replace(regex, replacements[placeholder]);
+      body = body.replace(regex, replacements[placeholder]);
+    });
+    return { subject, body };
+  };
+
+  const showVipEmailPreviewFn = (lead) => {
+    const content = generateVipEmailContent(lead);
+    if (content) setVipEmailPreview({ lead, content });
+  };
+
+  const sendVipEmails = async () => {
+    const absolventi = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI && l.email);
+    if (absolventi.length === 0) {
+      setError('Nu există absolvenți cu email pentru a trimite oferta VIP!');
+      return;
+    }
+    setLoading(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/send-vip-emails`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({})
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Eroare la trimiterea emailurilor VIP');
+      const msg = result.results
+        ? `${result.results.sent} emailuri VIP trimise${result.results.failed > 0 ? `, ${result.results.failed} eșuate` : ''}!`
+        : result.message;
+      setSuccess(msg);
+      setShowVipEmailModal(false);
+      setVipEmailPreview(null);
+    } catch (err) {
+      console.error('Eroare trimitere VIP email:', err);
+      setError('Eroare la trimiterea emailurilor VIP: ' + (err.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const saveEmailTemplate = async () => {
     if (!editingTemplate.subject || !editingTemplate.body) {
       setError('Te rog completează subiectul și conținutul email-ului!');
@@ -962,18 +1113,21 @@ Contact:
 
     setLoading(true);
     try {
-      await supabase.from("settings").upsert({
+      const { error: upsertErr } = await supabase.from("settings").upsert({
         id: "emailTemplate",
         subject: editingTemplate.subject,
         body: editingTemplate.body,
         updatedAt: new Date().toISOString()
       });
+      if (upsertErr) throw upsertErr;
       await fetchEmailTemplate();
       setShowEmailTemplateEditor(false);
+      setError('');
       setSuccess('Template-ul de email a fost actualizat cu succes!');
     } catch (err) {
       console.error('Eroare la salvarea template-ului:', err);
-      setError('Eroare la salvarea template-ului de email');
+      setSuccess('');
+      setError('Eroare la salvarea template-ului de email: ' + (err.message || JSON.stringify(err)));
     } finally {
       setLoading(false);
     }
@@ -1231,24 +1385,57 @@ Contact:
   const exportToExcel = async () => {
     try {
       const ExcelJS = (await import('exceljs')).default;
-      const exportData = leaduri.map(lead => {
-        const mentor = mentoriData.find(m => m.id === lead.mentorAlocat);
+
+      const getMentorNume = (lead) => {
         const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
-        const mentorNume = mentorInfo ? mentorInfo.nume : (mentor ? mentor.nume : '');
-        return {
-          'Nume': lead.nume || '', 'Telefon': lead.telefon || '', 'Email': lead.email || '',
-          'Status': lead.status || '', 'Mentor': mentorNume,
-          'Data Alocare': lead.dataAlocare ? new Date(lead.dataAlocare).toLocaleString('ro-RO') : '',
-          'Data Confirmare': lead.dataConfirmare ? new Date(lead.dataConfirmare).toLocaleString('ro-RO') : '',
-          'Observatii': lead.observatii || ''
-        };
-      });
+        const mentor = mentoriData.find(m => m.id === lead.mentorAlocat);
+        return mentorInfo ? mentorInfo.nume : (mentor ? mentor.nume : '');
+      };
+
+      const leaduriActivi = leaduri.filter(l => l.status !== LEAD_STATUS.COMPLET_2_SESIUNI);
+      const leaduriAbsolventi = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI);
+
+      const activiData = leaduriActivi.map(lead => ({
+        'Nume': lead.nume || '',
+        'Telefon': lead.telefon || '',
+        'Email': lead.email || '',
+        'Status': lead.status || '',
+        'Mentor': getMentorNume(lead),
+        'Data Alocare': lead.dataAlocare ? new Date(lead.dataAlocare).toLocaleString('ro-RO') : '',
+        'Data Confirmare': lead.dataConfirmare ? new Date(lead.dataConfirmare).toLocaleString('ro-RO') : '',
+        'Observatii': lead.observatii || ''
+      }));
+
+      const absolventiData = leaduriAbsolventi.map(lead => ({
+        'Nume': lead.nume || '',
+        'Telefon': lead.telefon || '',
+        'Email': lead.email || '',
+        'Mentor': getMentorNume(lead),
+        'Sesiunea 1': lead.prezenta1 === true ? 'Prezent' : lead.prezenta1 === false ? 'Absent' : '',
+        'Sesiunea 2': lead.prezenta2 === true ? 'Prezent' : lead.prezenta2 === false ? 'Absent' : '',
+        'Data Alocare': lead.dataAlocare ? new Date(lead.dataAlocare).toLocaleString('ro-RO') : '',
+        'Data Confirmare': lead.dataConfirmare ? new Date(lead.dataConfirmare).toLocaleString('ro-RO') : '',
+        'Observatii': lead.observatii || ''
+      }));
+
       const wb = new ExcelJS.Workbook();
-      const ws = wb.addWorksheet('Leaduri');
-      if (exportData.length > 0) {
-        ws.columns = Object.keys(exportData[0]).map(key => ({ header: key, key }));
-        exportData.forEach(row => ws.addRow(row));
+
+      // Sheet 1 — Leads Activi
+      const wsActivi = wb.addWorksheet('Leads Activi');
+      if (activiData.length > 0) {
+        wsActivi.columns = Object.keys(activiData[0]).map(key => ({ header: key, key, width: 22 }));
+        wsActivi.getRow(1).font = { bold: true };
+        activiData.forEach(row => wsActivi.addRow(row));
       }
+
+      // Sheet 2 — Absolvenți
+      const wsAbs = wb.addWorksheet('Absolventi');
+      if (absolventiData.length > 0) {
+        wsAbs.columns = Object.keys(absolventiData[0]).map(key => ({ header: key, key, width: 22 }));
+        wsAbs.getRow(1).font = { bold: true };
+        absolventiData.forEach(row => wsAbs.addRow(row));
+      }
+
       const fileName = `leaduri_export_${new Date().toISOString().split('T')[0]}.xlsx`;
       const buffer = await wb.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1256,7 +1443,7 @@ Contact:
       const a = document.createElement('a');
       a.href = url; a.download = fileName; a.click();
       URL.revokeObjectURL(url);
-      setSuccess(`${leaduri.length} leaduri exportate cu succes în ${fileName}!`);
+      setSuccess(`Export reușit: ${leaduriActivi.length} leads activi + ${leaduriAbsolventi.length} absolvenți în ${fileName}!`);
     } catch (err) {
       console.error('Eroare la exportul în Excel:', err);
       setError('Eroare la exportul în Excel');
@@ -1356,11 +1543,14 @@ Contact:
     return true;
   };
 
-  // Admin table computed
+  // Admin table computed (excludes absolvenți - complet_2_sesiuni are shown in separate tab)
   const leaduriFiltrate = leaduri.filter(l =>
-    l.nume?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    l.telefon?.includes(searchQuery) ||
-    l.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    l.status !== LEAD_STATUS.COMPLET_2_SESIUNI &&
+    (
+      l.nume?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      l.telefon?.includes(searchQuery) ||
+      l.email?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
   );
 
   const leaduriSortate = [...leaduriFiltrate].sort((a, b) => {
@@ -1489,6 +1679,13 @@ Contact:
         editingTemplate={editingTemplate} setEditingTemplate={setEditingTemplate}
         openEmailTemplateEditor={openEmailTemplateEditor} saveEmailTemplate={saveEmailTemplate}
         setShowEmailTemplateEditor={setShowEmailTemplateEditor}
+        vipEmailTemplate={vipEmailTemplate}
+        showVipEmailModal={showVipEmailModal} setShowVipEmailModal={setShowVipEmailModal}
+        showVipEmailTemplateEditor={showVipEmailTemplateEditor} setShowVipEmailTemplateEditor={setShowVipEmailTemplateEditor}
+        editingVipTemplate={editingVipTemplate} setEditingVipTemplate={setEditingVipTemplate}
+        openVipEmailTemplateEditor={openVipEmailTemplateEditor} saveVipEmailTemplate={saveVipEmailTemplate}
+        vipEmailPreview={vipEmailPreview} setVipEmailPreview={setVipEmailPreview}
+        showVipEmailPreviewFn={showVipEmailPreviewFn} sendVipEmails={sendVipEmails}
         showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
       />
     );

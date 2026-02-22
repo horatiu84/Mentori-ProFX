@@ -64,9 +64,11 @@ export default function ConfirmWebinar() {
           return;
         }
 
-        // Verificăm dacă link-ul a expirat (lead resetat la nealocat sau timeout depășit)
+        // Verificăm dacă link-ul a expirat (lead resetat la nealocat, timeout depășit,
+        // sau realocarea nu a primit încă un nou email de la admin)
         const isTimedOut = lead.dataTimeout && new Date() > new Date(lead.dataTimeout);
-        if (lead.status === LEAD_STATUS.NEALOCAT || isTimedOut) {
+        const emailNeTrimis = !lead.emailTrimis; // după realocare automată emailTrimis = false
+        if (lead.status === LEAD_STATUS.NEALOCAT || isTimedOut || emailNeTrimis) {
           setStatus('expired');
           setLoading(false);
           return;

@@ -39,8 +39,37 @@ export default function AdminDashboard({
   bulkEmailPreview, setBulkEmailPreview, showBulkEmailPreview, sendBulkEmail,
   emailTemplate, showEmailTemplateEditor, editingTemplate, setEditingTemplate,
   openEmailTemplateEditor, saveEmailTemplate, setShowEmailTemplateEditor,
+  vipEmailTemplate,
+  showVipEmailModal, setShowVipEmailModal,
+  showVipEmailTemplateEditor, setShowVipEmailTemplateEditor,
+  editingVipTemplate, setEditingVipTemplate,
+  openVipEmailTemplateEditor, saveVipEmailTemplate,
+  vipEmailPreview, setVipEmailPreview,
+  showVipEmailPreviewFn, sendVipEmails,
   showModal, modalConfig, closeModal, handleModalConfirm,
 }) {
+  const [activeLeadTab, setActiveLeadTab] = useState('activi');
+  const [absSearchQuery, setAbsSearchQuery] = useState('');
+  const [absCurrentPage, setAbsCurrentPage] = useState(1);
+  const [absSortBy, setAbsSortBy] = useState('data-desc');
+  const absLeaduriPerPage = 10;
+  const absolventiAll = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI);
+  const absolventiFiltrati = absolventiAll.filter(l =>
+    l.nume?.toLowerCase().includes(absSearchQuery.toLowerCase()) ||
+    l.telefon?.includes(absSearchQuery) ||
+    l.email?.toLowerCase().includes(absSearchQuery.toLowerCase())
+  );
+  const absolventiSortati = [...absolventiFiltrati].sort((a, b) => {
+    if (absSortBy === 'nume-asc') return (a.nume || '').localeCompare(b.nume || '');
+    if (absSortBy === 'nume-desc') return (b.nume || '').localeCompare(a.nume || '');
+    if (absSortBy === 'data-asc') return new Date(a.createdAt) - new Date(b.createdAt);
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
+  const absTotalPages = Math.ceil(absolventiSortati.length / absLeaduriPerPage);
+  const absIndexOfLast = absCurrentPage * absLeaduriPerPage;
+  const absIndexOfFirst = absIndexOfLast - absLeaduriPerPage;
+  const absolventiCurenti = absolventiSortati.slice(absIndexOfFirst, absIndexOfLast);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900">
       <div className="max-w-7xl mx-auto pt-10 space-y-6 text-white px-4 pb-10">
@@ -257,6 +286,10 @@ export default function AdminDashboard({
                 className={"px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border " + (loading ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-yellow-500/20 to-yellow-600/20 hover:from-yellow-500/30 hover:to-yellow-600/30 border-yellow-500/50 text-yellow-300')}>
                 ✉️ Editează Email
               </button>
+              <button onClick={openVipEmailTemplateEditor} disabled={loading}
+                className={"px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border " + (loading ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500/20 to-yellow-600/20 hover:from-amber-500/30 hover:to-yellow-600/30 border-amber-500/50 text-amber-300')}>
+                💎 Email VIP
+              </button>
               <button onClick={stergeLeaduri} disabled={loading || leaduri.length === 0}
                 className={"px-6 py-3 rounded-xl font-semibold transition-all flex items-center justify-center gap-2 border " + (loading || leaduri.length === 0 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-red-500/20 to-red-600/20 hover:from-red-500/30 hover:to-red-600/30 border-red-500/50 text-red-300')}>
                 Sterge Toate
@@ -423,7 +456,22 @@ export default function AdminDashboard({
         {/* All Leads Table */}
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-6">
-            <h2 className="text-xl font-bold text-blue-400 mb-4">Toate Leadurile ({leaduri.length})</h2>
+            {/* Tabs */}
+            <div className="flex items-center gap-2 mb-5 border-b border-gray-700/50 pb-4">
+              <button
+                onClick={() => setActiveLeadTab('activi')}
+                className={"px-5 py-2 rounded-xl font-semibold text-sm transition-all border " + (activeLeadTab === 'activi' ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 border-gray-600/50 text-gray-400 hover:bg-gray-700/30')}
+              >
+                📋 Leads Activi ({leaduri.filter(l => l.status !== LEAD_STATUS.COMPLET_2_SESIUNI).length})
+              </button>
+              <button
+                onClick={() => { setActiveLeadTab('absolventi'); setAbsCurrentPage(1); }}
+                className={"px-5 py-2 rounded-xl font-semibold text-sm transition-all border " + (activeLeadTab === 'absolventi' ? 'bg-emerald-500/30 border-emerald-500/50 text-emerald-300' : 'bg-gray-700/20 border-gray-600/50 text-gray-400 hover:bg-gray-700/30')}
+              >
+                🎓 Absolvenți ({absolventiAll.length})
+              </button>
+            </div>
+            {activeLeadTab === 'activi' && (<>
             <div className="flex flex-col sm:flex-row gap-3 mb-4">
               <Input type="text" placeholder="Cauta dupa nume, telefon sau email..." value={searchQuery}
                 onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
@@ -625,9 +673,299 @@ export default function AdminDashboard({
                 )}
               </>
             )}
+            </>)}
+
+            {/* Absolvenți Tab */}
+            {activeLeadTab === 'absolventi' && (
+              <>
+                {absolventiAll.length === 0 ? (
+                  <div className="text-center py-12 text-gray-400">
+                    <p className="text-5xl mb-4">🎓</p>
+                    <p className="text-lg font-semibold text-emerald-300">Niciun absolvent încă</p>
+                    <p className="text-sm mt-2">Leadurile cu status "Complet 2 Sesiuni" vor apărea aici</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                      <div className="flex flex-col sm:flex-row gap-3 flex-1">
+                        <input type="text" placeholder="Cauta dupa nume, telefon sau email..."
+                          value={absSearchQuery}
+                          onChange={(e) => { setAbsSearchQuery(e.target.value); setAbsCurrentPage(1); }}
+                          className="flex-1 p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500" />
+                        <select value={absSortBy} onChange={(e) => setAbsSortBy(e.target.value)}
+                          className="p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white sm:w-48">
+                          <option value="data-desc">Data (Nou → Vechi)</option>
+                          <option value="data-asc">Data (Vechi → Nou)</option>
+                          <option value="nume-asc">Nume (A → Z)</option>
+                          <option value="nume-desc">Nume (Z → A)</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={() => setShowVipEmailModal(true)}
+                        disabled={loading}
+                        className={"px-5 py-3 rounded-xl font-semibold text-sm transition-all border flex items-center gap-2 shrink-0 " + (loading ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-amber-500/20 to-yellow-500/20 hover:from-amber-500/30 hover:to-yellow-500/30 border-amber-500/50 text-amber-300')}
+                      >
+                        💎 Trimite Oferţă VIP ({absolventiAll.filter(l => l.email).length})
+                      </button>
+                    </div>
+                    {/* Mobile */}
+                    <div className="block md:hidden space-y-3">
+                      {absolventiCurenti.map((lead, index) => {
+                        const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                        const isEd = editingLead === lead.id;
+                        return (
+                          <div key={lead.id} className="bg-emerald-900/10 border border-emerald-700/30 rounded-xl p-4 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <span className="text-xs text-gray-500">#{absIndexOfFirst + index + 1}</span>
+                                {isEd
+                                  ? <Input type="text" value={editLeadData.nume} onChange={(e) => setEditLeadData({...editLeadData, nume: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm mt-1" />
+                                  : <p className="font-bold text-white">{lead.nume}</p>
+                                }
+                                {isEd ? (
+                                  <>
+                                    <Input type="tel" value={editLeadData.telefon} onChange={(e) => setEditLeadData({...editLeadData, telefon: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm mt-1" />
+                                    <Input type="email" value={editLeadData.email} onChange={(e) => setEditLeadData({...editLeadData, email: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm mt-1" />
+                                  </>
+                                ) : (
+                                  <>
+                                    <p className="text-xs text-gray-300">{lead.telefon}</p>
+                                    <p className="text-xs text-gray-400 truncate">{lead.email}</p>
+                                  </>
+                                )}
+                              </div>
+                              <span className="px-2 py-1 text-xs font-semibold rounded-full border bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shrink-0">🎓 Absolvent</span>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                              {lead.prezenta1 != null && <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta1 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S1 {lead.prezenta1 ? '✅' : '❌'}</span>}
+                              {lead.prezenta2 != null && <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S2 {lead.prezenta2 ? '✅' : '❌'}</span>}
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-700/30">
+                              <span>{mentorInfo ? mentorInfo.nume : '-'}</span>
+                              <span>{formatDate(lead.createdAt)}</span>
+                            </div>
+                            <div className="flex gap-2">
+                              {isEd ? (
+                                <>
+                                  <button onClick={() => handleSaveEditLead(lead.id)} disabled={loading} className="flex-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Salveaza</button>
+                                  <button onClick={handleCancelEdit} className="flex-1 bg-gray-500/20 hover:bg-gray-500/30 border border-gray-500/50 text-gray-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Anuleaza</button>
+                                </>
+                              ) : (
+                                <>
+                                  <button onClick={() => handleEditLead(lead)} disabled={loading} className="flex-1 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Edit</button>
+                                  <button onClick={() => handleDeleteLead(lead)} disabled={loading} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Sterge</button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Desktop */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-700/50">
+                        <thead className="bg-gray-900/50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">#</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Nume</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Telefon</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Email</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Sesiuni</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Mentor</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Data</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actiuni</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700/30">
+                          {absolventiCurenti.map((lead, index) => {
+                            const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                            const isEd = editingLead === lead.id;
+                            return (
+                              <tr key={lead.id} className="hover:bg-emerald-900/10 transition-all">
+                                <td className="px-4 py-3 text-sm text-gray-400">{absIndexOfFirst + index + 1}</td>
+                                <td className="px-4 py-3 text-sm font-medium text-white">
+                                  {isEd ? <Input type="text" value={editLeadData.nume} onChange={(e) => setEditLeadData({...editLeadData, nume: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50" /> : lead.nume}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-white">
+                                  {isEd ? <Input type="tel" value={editLeadData.telefon} onChange={(e) => setEditLeadData({...editLeadData, telefon: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50" /> : lead.telefon}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-300">
+                                  {isEd ? <Input type="email" value={editLeadData.email} onChange={(e) => setEditLeadData({...editLeadData, email: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50" /> : lead.email}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex flex-col gap-1">
+                                    {lead.prezenta1 != null && <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta1 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S1 {lead.prezenta1 ? '✅' : '❌'}</span>}
+                                    {lead.prezenta2 != null && <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S2 {lead.prezenta2 ? '✅' : '❌'}</span>}
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-400">{formatDate(lead.createdAt)}</td>
+                                <td className="px-4 py-3 text-sm">
+                                  {isEd ? (
+                                    <div className="flex gap-2">
+                                      <button onClick={() => handleSaveEditLead(lead.id)} disabled={loading} className="bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-300 px-3 py-1 rounded-lg text-xs font-semibold">Salveaza</button>
+                                      <button onClick={handleCancelEdit} className="bg-gray-500/20 hover:bg-gray-500/30 border border-gray-500/50 text-gray-300 px-3 py-1 rounded-lg text-xs font-semibold">Anuleaza</button>
+                                    </div>
+                                  ) : (
+                                    <div className="flex gap-1">
+                                      <button onClick={() => handleEditLead(lead)} disabled={loading} className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-2 py-1 rounded-lg text-xs font-semibold">Edit</button>
+                                      <button onClick={() => handleDeleteLead(lead)} disabled={loading} className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-2 py-1 rounded-lg text-xs font-semibold">Sterge</button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {absTotalPages > 1 && (
+                      <div className="mt-6 flex items-center justify-between gap-2">
+                        <div className="text-xs md:text-sm text-gray-400">{absIndexOfFirst + 1}-{Math.min(absIndexOfLast, absolventiSortati.length)} / {absolventiSortati.length}</div>
+                        <div className="flex gap-1 md:gap-2">
+                          <button onClick={() => setAbsCurrentPage(p => Math.max(1, p - 1))} disabled={absCurrentPage === 1}
+                            className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (absCurrentPage === 1 ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300')}>‹ Ant</button>
+                          <div className="flex gap-1">
+                            {[...Array(absTotalPages)].map((_, i) => {
+                              const p = i + 1;
+                              if (p === 1 || p === absTotalPages || (p >= absCurrentPage - 1 && p <= absCurrentPage + 1))
+                                return <button key={p} onClick={() => setAbsCurrentPage(p)} className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (absCurrentPage === p ? 'bg-emerald-500/30 border-emerald-500/50 text-emerald-300' : 'bg-gray-700/20 hover:bg-gray-700/30 border-gray-600/50 text-gray-400')}>{p}</button>;
+                              if (p === absCurrentPage - 2 || p === absCurrentPage + 2) return <span key={p} className="px-1 py-2 text-gray-500 text-sm">…</span>;
+                              return null;
+                            })}
+                          </div>
+                          <button onClick={() => setAbsCurrentPage(p => Math.min(absTotalPages, p + 1))} disabled={absCurrentPage === absTotalPages}
+                            className={"px-3 md:px-4 py-2 rounded-xl font-semibold transition-all border text-sm " + (absCurrentPage === absTotalPages ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300')}>Urm ›</button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
+
+      {/* VIP Email Modal */}
+      {showVipEmailModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-amber-700/50 max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-amber-300 flex items-center gap-2">
+                <span>💎</span> Trimite Oferţă VIP Absolvenților
+              </h3>
+              <button onClick={() => { setShowVipEmailModal(false); setVipEmailPreview(null); }} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+              <p className="text-amber-200 text-sm leading-relaxed">
+                📬 Se vor trimite emailuri cu <strong>Oferta VIP ProFX (20€/lună)</strong> către toți absolvenții cu adresă de email.
+              </p>
+              <p className="text-amber-300 font-semibold mt-2">
+                {(() => { const n = leaduri ? leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI && l.email).length : 0; return `📊 ${n} absolvenți vor primi email`; })()} 
+              </p>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-400 mb-2">Absolvenți:</p>
+              <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 max-h-52 overflow-y-auto space-y-1">
+                {leaduri && leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI).map(lead => (
+                  <button key={lead.id}
+                    onClick={() => lead.email ? showVipEmailPreviewFn(lead) : null}
+                    disabled={!lead.email}
+                    className={"w-full flex items-center justify-between py-2 px-3 rounded-lg transition-all text-left " + (lead.email ? 'bg-gray-700/30 hover:bg-amber-500/10 cursor-pointer group' : 'opacity-40 cursor-not-allowed bg-gray-800/30')}
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-white group-hover:text-amber-300 transition-colors">{lead.nume}</p>
+                      <p className="text-xs text-gray-400">{lead.email || '— fără email'}</p>
+                    </div>
+                    {lead.email
+                      ? <span className="text-xs text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity">👁️ preview</span>
+                      : <span className="text-xs text-red-400">❌ fără email</span>
+                    }
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {vipEmailPreview && (
+              <div className="bg-amber-900/10 border border-amber-500/30 rounded-xl p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold text-amber-300 flex items-center gap-2"><span>👁️</span> Preview – {vipEmailPreview.lead.nume}</h4>
+                  <button onClick={() => setVipEmailPreview(null)} className="text-gray-400 hover:text-white text-xl">&times;</button>
+                </div>
+                <div className="bg-gray-900/50 rounded-lg p-4 max-h-56 overflow-y-auto">
+                  <p className="text-xs text-gray-400 mb-1">Subiect:</p>
+                  <p className="text-white font-semibold text-sm mb-3">{vipEmailPreview.content.subject}</p>
+                  <p className="text-xs text-gray-400 mb-2">Conținut:</p>
+                  <pre className="text-gray-300 whitespace-pre-wrap font-sans text-xs leading-relaxed">{vipEmailPreview.content.body}</pre>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-3 border-t border-gray-700/50">
+              <button onClick={() => { setShowVipEmailModal(false); setVipEmailPreview(null); }}
+                className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-3 px-4 rounded-xl font-semibold transition-all">Anulează</button>
+              <button onClick={sendVipEmails} disabled={loading || !(leaduri && leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI && l.email).length > 0)}
+                className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 py-3 px-4 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                {loading ? 'Se trimite...' : <><span>💎</span> Trimite Email VIP</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIP Template Editor Modal */}
+      {showVipEmailTemplateEditor && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-amber-700/50 max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-amber-300 flex items-center gap-2">
+                <span>💎</span> Editează Template Email VIP
+              </h3>
+              <button onClick={() => setShowVipEmailTemplateEditor(false)} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6">
+              <h4 className="font-semibold text-amber-300 mb-2">📝 Variabile Disponibile</h4>
+              <div className="text-sm text-gray-300">
+                <div className="bg-gray-800/50 rounded-lg p-2 inline-block">
+                  <code className="text-yellow-300">{'{{'+'nume'+'}}'}</code> – Numele absolventului
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-3">Variabila <code className="text-yellow-300">{'{{'+'nume'+'}}'}</code> va fi înlocuită automat cu numele fiecărui absolvent.</p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Subiect Email:</label>
+                <input type="text" value={editingVipTemplate.subject}
+                  onChange={(e) => setEditingVipTemplate({ ...editingVipTemplate, subject: e.target.value })}
+                  placeholder="ex: Ofertă VIP Exclusivă – ProFX Premium"
+                  className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50 focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Conținut Email:</label>
+                <textarea value={editingVipTemplate.body}
+                  onChange={(e) => setEditingVipTemplate({ ...editingVipTemplate, body: e.target.value })}
+                  rows={18}
+                  placeholder="Scrie conținutul emailului VIP aici..."
+                  className="w-full p-4 rounded-xl bg-gray-800/50 text-white border border-gray-600/50 font-mono text-sm leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-amber-500/50" />
+              </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-gray-700/50 flex gap-3">
+              <button onClick={() => setShowVipEmailTemplateEditor(false)}
+                className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-3 px-4 rounded-xl font-semibold transition-all">Anulează</button>
+              <button onClick={saveVipEmailTemplate} disabled={loading}
+                className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 py-3 px-4 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+                {loading ? 'Se salvează...' : '💾 Salvează Template VIP'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Date Modal */}
       {showDateModal && (

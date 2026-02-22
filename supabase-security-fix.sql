@@ -20,6 +20,7 @@ DROP POLICY IF EXISTS "Service role can do anything on alocari" ON alocari;
 DROP POLICY IF EXISTS "Service role can do anything on settings" ON settings;
 DROP POLICY IF EXISTS "Service role can do anything on clase" ON clase;
 DROP POLICY IF EXISTS "Service role can do anything on studenti" ON studenti;
+DROP POLICY IF EXISTS "Anyone can insert settings" ON settings;
 
 -- ==================== USERS TABLE POLICIES ====================
 -- CRITICAL: Block all public access to users table (contains passwords!)
@@ -92,6 +93,11 @@ CREATE POLICY "Anyone can update settings"
   ON settings
   FOR UPDATE
   USING (true);
+
+CREATE POLICY "Anyone can insert settings"
+  ON settings
+  FOR INSERT
+  WITH CHECK (true);
 
 -- ==================== CLASE TABLE POLICIES ====================
 CREATE POLICY "Anyone can access clase"
