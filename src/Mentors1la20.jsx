@@ -38,6 +38,7 @@ export default function Mentori1La20() {
   const [selectedMentorForDate, setSelectedMentorForDate] = useState(null);
   const [manualDate, setManualDate] = useState('');
   const [manualDate2, setManualDate2] = useState('');
+  const [manualDate3, setManualDate3] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [modalConfig, setModalConfig] = useState({ type: 'alert', title: '', message: '', onConfirm: null });
   const [mentorSearchQuery, setMentorSearchQuery] = useState('');
@@ -61,7 +62,7 @@ export default function Mentori1La20() {
   const isAutoAllocatingRef = useRef(false);
   const lastAutoAllocCheckRef = useRef(0);
 
-  const COMPLETED_2_SESSIONS_HIDE_MS = 60 * 60 * 1000;
+  const COMPLETED_3_SESSIONS_HIDE_MS = 60 * 60 * 1000;
 
   // ==================== MODAL HELPERS ====================
   const showAlert = (title, message) => {
@@ -93,6 +94,7 @@ export default function Mentori1La20() {
   const ACTIVE_PROGRAM_STATUSES = [LEAD_STATUS.ALOCAT, LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM];
   const FINALIZED_PROGRAM_STATUSES = [
     LEAD_STATUS.COMPLET,
+    LEAD_STATUS.COMPLET_3_SESIUNI,
     LEAD_STATUS.COMPLET_2_SESIUNI,
     LEAD_STATUS.COMPLET_SESIUNE_FINALA,
     LEAD_STATUS.COMPLET_SESIUNE_1
@@ -860,15 +862,16 @@ Echipa ProFX`,
     }
   };
 
-  const updateOneToTwenty = async (mentorId, customDate, customDate2) => {
+  const updateOneToTwenty = async (mentorId, customDate, customDate2, customDate3) => {
     try {
       const updates = {};
       if (customDate) updates.ultimulOneToTwenty = new Date(customDate).toISOString();
       if (customDate2) updates.webinar2Date = new Date(customDate2).toISOString();
+      if (customDate3) updates.webinar3Date = new Date(customDate3).toISOString();
       if (Object.keys(updates).length === 0) { setError('Te rog selecteaza cel putin o data!'); return; }
       await supabase.from('mentori').update(updates).eq('id', mentorId);
       await fetchMentori(); setSuccess('Datele webinarului actualizate!');
-      setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2('');
+      setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); setManualDate3('');
     } catch (err) { setError('Eroare la actualizarea datei 1:20'); }
   };
 
@@ -877,6 +880,7 @@ Echipa ProFX`,
     const mentor = mentoriData.find(m => m.id === mentorId);
     setManualDate(mentor?.ultimulOneToTwenty ? new Date(mentor.ultimulOneToTwenty).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16));
     setManualDate2(mentor?.webinar2Date ? new Date(mentor.webinar2Date).toISOString().slice(0, 16) : '');
+    setManualDate3(mentor?.webinar3Date ? new Date(mentor.webinar3Date).toISOString().slice(0, 16) : '');
     setShowDateModal(true);
   };
 
@@ -1014,8 +1018,8 @@ Echipa ProFX`,
   };
 
   const handleConfirmDate = () => {
-    if (!manualDate && !manualDate2) { setError('Te rog selecteaza cel putin o data!'); return; }
-    updateOneToTwenty(selectedMentorForDate, manualDate, manualDate2);
+    if (!manualDate && !manualDate2 && !manualDate3) { setError('Te rog selecteaza cel putin o data!'); return; }
+    updateOneToTwenty(selectedMentorForDate, manualDate, manualDate2, manualDate3);
   };
 
   const openEmailTemplateEditor = () => {
@@ -1087,7 +1091,7 @@ Echipa ProFX`,
   };
 
   const sendVipEmails = async () => {
-    const absolventi = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI && l.email);
+    const absolventi = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI && l.email);
     if (absolventi.length === 0) {
       setError('Nu există absolvenți cu email pentru a trimite oferta VIP!');
       return;
@@ -1202,46 +1206,76 @@ Echipa ProFX`,
     });
   };
 
-  const computeFinalStatus = (prezenta1, prezenta2) => {
-    if (prezenta1 && prezenta2) return LEAD_STATUS.COMPLET_2_SESIUNI;
-    if (!prezenta1 && prezenta2) return LEAD_STATUS.COMPLET_SESIUNE_FINALA;
-    if (prezenta1 && !prezenta2) return LEAD_STATUS.COMPLET_SESIUNE_1;
+  const computeFinalStatus = (prezenta1, prezenta2, prezenta3) => {
+    const totalPrezente = [prezenta1, prezenta2, prezenta3].filter(v => v === true).length;
+    if (totalPrezente === 3) return LEAD_STATUS.COMPLET_3_SESIUNI;
+    if (totalPrezente === 2) return LEAD_STATUS.COMPLET_2_SESIUNI;
+    if (totalPrezente === 1) return LEAD_STATUS.COMPLET_SESIUNE_1;
     return LEAD_STATUS.NEALOCAT;
   };
 
-  const getCompletedSession2TimeLeftMs = (lead, nowTs = Date.now()) => {
-    if (!lead || lead.status !== LEAD_STATUS.COMPLET_2_SESIUNI || lead.prezenta2 !== true || !lead.dataOneToTwenty) return null;
+  const getCompletedSession3TimeLeftMs = (lead, nowTs = Date.now()) => {
+    if (!lead || lead.status !== LEAD_STATUS.COMPLET_3_SESIUNI || lead.prezenta3 !== true || !lead.dataOneToTwenty) return null;
     const completedAtMs = new Date(lead.dataOneToTwenty).getTime();
     if (Number.isNaN(completedAtMs)) return null;
-    return Math.max(0, COMPLETED_2_SESSIONS_HIDE_MS - (nowTs - completedAtMs));
+    return Math.max(0, COMPLETED_3_SESSIONS_HIDE_MS - (nowTs - completedAtMs));
   };
 
   const handleSession2Prezent = async (leadId) => {
-    showConfirmDialog('Prezent Sesiune 2', 'Marcheaзă leadul ca PREZENT la Sesiunea 2? Aceasta finalizează programul.', async () => {
+    showConfirmDialog('Prezent Sesiune 2', 'Marcheaзă leadul ca PREZENT la Sesiunea 2?', async () => {
       setLoading(true);
       try {
-        const lead = leaduri.find(l => l.id === leadId);
-        if (!lead) throw new Error('Lead negăsit');
-        const finalStatus = computeFinalStatus(lead.prezenta1, true);
         await supabase.from('leaduri').update({
           prezenta2: true,
-          status: finalStatus,
+          status: LEAD_STATUS.IN_PROGRAM,
           dataOneToTwenty: new Date().toISOString()
         }).eq('id', leadId);
-        await fetchLeaduri(); setSuccess('Lead marcat ca Prezent la Sesiunea 2. Program finalizat!');
+        await fetchLeaduri(); setSuccess('Lead marcat ca Prezent la Sesiunea 2. Continuă cu Sesiunea 3.');
       } catch (err) { setError('Eroare la marcarea prezenței'); } finally { setLoading(false); }
     });
   };
 
   const handleSession2NoShow = async (leadId) => {
-    showConfirmDialog('No-Show Sesiune 2', 'Marcheaзă leadul ca NO-SHOW la Sesiunea 2? Aceasta finalizează programul.', async () => {
+    showConfirmDialog('No-Show Sesiune 2', 'Marcheaзă leadul ca NO-SHOW la Sesiunea 2?', async () => {
+      setLoading(true);
+      try {
+        await supabase.from('leaduri').update({
+          prezenta2: false,
+          status: LEAD_STATUS.IN_PROGRAM,
+          dataOneToTwenty: new Date().toISOString()
+        }).eq('id', leadId);
+        await fetchLeaduri();
+        setSuccess('Lead marcat ca No-Show la Sesiunea 2. Continuă cu Sesiunea 3.');
+      } catch (err) { setError('Eroare la marcarea prezenței'); } finally { setLoading(false); }
+    });
+  };
+
+  const handleSession3Prezent = async (leadId) => {
+    showConfirmDialog('Prezent Sesiune 3', 'Marcheaзă leadul ca PREZENT la Sesiunea 3? Aceasta finalizează programul.', async () => {
       setLoading(true);
       try {
         const lead = leaduri.find(l => l.id === leadId);
         if (!lead) throw new Error('Lead negăsit');
-        const finalStatus = computeFinalStatus(lead.prezenta1, false);
+        const finalStatus = computeFinalStatus(lead.prezenta1, lead.prezenta2, true);
+        await supabase.from('leaduri').update({
+          prezenta3: true,
+          status: finalStatus,
+          dataOneToTwenty: new Date().toISOString()
+        }).eq('id', leadId);
+        await fetchLeaduri(); setSuccess('Lead marcat ca Prezent la Sesiunea 3. Program finalizat!');
+      } catch (err) { setError('Eroare la marcarea prezenței'); } finally { setLoading(false); }
+    });
+  };
+
+  const handleSession3NoShow = async (leadId) => {
+    showConfirmDialog('No-Show Sesiune 3', 'Marcheaзă leadul ca NO-SHOW la Sesiunea 3? Aceasta finalizează programul.', async () => {
+      setLoading(true);
+      try {
+        const lead = leaduri.find(l => l.id === leadId);
+        if (!lead) throw new Error('Lead negăsit');
+        const finalStatus = computeFinalStatus(lead.prezenta1, lead.prezenta2, false);
         const updates = {
-          prezenta2: false,
+          prezenta3: false,
           status: finalStatus,
           dataOneToTwenty: new Date().toISOString()
         };
@@ -1249,6 +1283,7 @@ Echipa ProFX`,
           updates.mentorAlocat = null;
           updates.prezenta1 = null;
           updates.prezenta2 = null;
+          updates.prezenta3 = null;
           updates.dataAlocare = null;
           updates.dataConfirmare = null;
           updates.emailTrimis = false;
@@ -1258,8 +1293,8 @@ Echipa ProFX`,
         await supabase.from('leaduri').update(updates).eq('id', leadId);
         await fetchLeaduri();
         setSuccess(finalStatus === LEAD_STATUS.NEALOCAT
-          ? 'No-Show la ambele sesiuni — leadul va fi disponibil pentru re-alocare.'
-          : 'Lead marcat ca No-Show la Sesiunea 2. Program finalizat.');
+          ? 'No-Show la toate sesiunile — leadul va fi disponibil pentru re-alocare.'
+          : 'Lead marcat la Sesiunea 3. Program finalizat.');
       } catch (err) { setError('Eroare la marcarea prezenței'); } finally { setLoading(false); }
     });
   };
@@ -1272,14 +1307,22 @@ Echipa ProFX`,
       const updates = {};
       if (session === 1) {
         updates.prezenta1 = newValue;
-        if (lead.prezenta2 != null) {
-          updates.status = computeFinalStatus(newValue, lead.prezenta2);
+        if (lead.prezenta3 != null) {
+          updates.status = computeFinalStatus(newValue, lead.prezenta2, lead.prezenta3);
+        } else if (lead.prezenta2 != null) {
+          updates.status = LEAD_STATUS.IN_PROGRAM;
         }
-        // dacă S2 nu e încă marcată, rămâne in_program
-      } else {
+      } else if (session === 2) {
         updates.prezenta2 = newValue;
-        updates.status = computeFinalStatus(lead.prezenta1, newValue);
-        if (newValue === true) {
+        if (lead.prezenta3 != null) {
+          updates.status = computeFinalStatus(lead.prezenta1, newValue, lead.prezenta3);
+        } else {
+          updates.status = LEAD_STATUS.IN_PROGRAM;
+        }
+      } else {
+        updates.prezenta3 = newValue;
+        updates.status = computeFinalStatus(lead.prezenta1, lead.prezenta2, newValue);
+        if (updates.status !== LEAD_STATUS.NEALOCAT) {
           updates.dataOneToTwenty = new Date().toISOString();
         }
       }
@@ -1419,8 +1462,8 @@ Echipa ProFX`,
         return mentorInfo ? mentorInfo.nume : (mentor ? mentor.nume : '');
       };
 
-      const leaduriActivi = leaduri.filter(l => l.status !== LEAD_STATUS.COMPLET_2_SESIUNI);
-      const leaduriAbsolventi = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI);
+      const leaduriActivi = leaduri.filter(l => l.status !== LEAD_STATUS.COMPLET_3_SESIUNI);
+      const leaduriAbsolventi = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI);
 
       const activiData = leaduriActivi.map(lead => ({
         'Nume': lead.nume || '',
@@ -1440,6 +1483,7 @@ Echipa ProFX`,
         'Mentor': getMentorNume(lead),
         'Sesiunea 1': lead.prezenta1 === true ? 'Prezent' : lead.prezenta1 === false ? 'Absent' : '',
         'Sesiunea 2': lead.prezenta2 === true ? 'Prezent' : lead.prezenta2 === false ? 'Absent' : '',
+        'Sesiunea 3': lead.prezenta3 === true ? 'Prezent' : lead.prezenta3 === false ? 'Absent' : '',
         'Data Alocare': lead.dataAlocare ? new Date(lead.dataAlocare).toLocaleString('ro-RO') : '',
         'Data Confirmare': lead.dataConfirmare ? new Date(lead.dataConfirmare).toLocaleString('ro-RO') : '',
         'Observatii': lead.observatii || ''
@@ -1551,7 +1595,7 @@ Echipa ProFX`,
     ? leaduri
         .filter(l => l.mentorAlocat === currentMentorId)
         .filter(l => {
-          const timeLeftMs = getCompletedSession2TimeLeftMs(l, mentorCompletionTick);
+          const timeLeftMs = getCompletedSession3TimeLeftMs(l, mentorCompletionTick);
           return timeLeftMs === null || timeLeftMs > 0;
         })
     : [];
@@ -1559,7 +1603,11 @@ Echipa ProFX`,
   const mentorLeaduriConfirmate = mentorLeaduri.filter(l => l.status === LEAD_STATUS.CONFIRMAT).length;
   const mentorLeaduriInProgram = mentorLeaduri.filter(l => l.status === LEAD_STATUS.IN_PROGRAM).length;
   const mentorLeaduriComplete = mentorLeaduri.filter(l => [
-    LEAD_STATUS.COMPLET, LEAD_STATUS.COMPLET_2_SESIUNI, LEAD_STATUS.COMPLET_SESIUNE_FINALA, LEAD_STATUS.COMPLET_SESIUNE_1
+    LEAD_STATUS.COMPLET,
+    LEAD_STATUS.COMPLET_3_SESIUNI,
+    LEAD_STATUS.COMPLET_2_SESIUNI,
+    LEAD_STATUS.COMPLET_SESIUNE_FINALA,
+    LEAD_STATUS.COMPLET_SESIUNE_1
   ].includes(l.status)).length;
   const mentorLeaduriNoShow = mentorLeaduri.filter(l => l.status === LEAD_STATUS.NO_SHOW).length;
   const mentorLeaduriNeconfirmate = mentorLeaduri.filter(l => l.status === LEAD_STATUS.NECONFIRMAT).length;
@@ -1577,9 +1625,9 @@ Echipa ProFX`,
     return true;
   };
 
-  // Admin table computed (excludes absolvenți - complet_2_sesiuni are shown in separate tab)
+  // Admin table computed (excludes absolvenți - complet_3_sesiuni are shown in separate tab)
   const leaduriFiltrate = leaduri.filter(l =>
-    l.status !== LEAD_STATUS.COMPLET_2_SESIUNI &&
+    l.status !== LEAD_STATUS.COMPLET_3_SESIUNI &&
     (
       l.nume?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       l.telefon?.includes(searchQuery) ||
@@ -1616,7 +1664,7 @@ Echipa ProFX`,
     if (mentorSortBy === 'nume-asc') return (a.nume || '').localeCompare(b.nume || '');
     if (mentorSortBy === 'nume-desc') return (b.nume || '').localeCompare(a.nume || '');
     if (mentorSortBy === 'status') {
-      const order = [LEAD_STATUS.ALOCAT, LEAD_STATUS.CONFIRMAT, LEAD_STATUS.IN_PROGRAM, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.NO_SHOW, LEAD_STATUS.COMPLET, LEAD_STATUS.COMPLET_2_SESIUNI, LEAD_STATUS.COMPLET_SESIUNE_FINALA, LEAD_STATUS.COMPLET_SESIUNE_1];
+      const order = [LEAD_STATUS.ALOCAT, LEAD_STATUS.CONFIRMAT, LEAD_STATUS.IN_PROGRAM, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.NO_SHOW, LEAD_STATUS.COMPLET, LEAD_STATUS.COMPLET_3_SESIUNI, LEAD_STATUS.COMPLET_2_SESIUNI, LEAD_STATUS.COMPLET_SESIUNE_FINALA, LEAD_STATUS.COMPLET_SESIUNE_1];
       return order.indexOf(a.status) - order.indexOf(b.status);
     }
     if (mentorSortBy === 'data-asc') {
@@ -1643,6 +1691,7 @@ Echipa ProFX`,
       available: mentorDB?.available ?? true,
       ultimulOneToTwenty: mentorDB?.ultimulOneToTwenty ?? null,
       webinar2Date: mentorDB?.webinar2Date ?? null,
+      webinar3Date: mentorDB?.webinar3Date ?? null,
       ordineCoada: mentorDB?.ordineCoada ?? MENTORI_DISPONIBILI.findIndex(m => m.id === mentorDef.id),
       leaduriAlocate: leaduriRealeMentor,
       createdAt: mentorDB?.createdAt ?? new Date().toISOString()
@@ -1703,6 +1752,7 @@ Echipa ProFX`,
         handleReallocateLead={handleReallocateLead} handleDeleteLead={handleDeleteLead}
         showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
         manualDate2={manualDate2} setManualDate2={setManualDate2}
+        manualDate3={manualDate3} setManualDate3={setManualDate3}
         handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}
         selectedMentorForDate={selectedMentorForDate} setSelectedMentorForDate={setSelectedMentorForDate}
         showAdminEmailModal={showAdminEmailModal} selectedMentorForEmail={selectedMentorForEmail}
@@ -1745,10 +1795,12 @@ Echipa ProFX`,
       openDateModal={openDateModal}
       handleCompleteLead={handleCompleteLead} handleNoShowLead={handleNoShowLead}
       handleSession2Prezent={handleSession2Prezent} handleSession2NoShow={handleSession2NoShow}
+      handleSession3Prezent={handleSession3Prezent} handleSession3NoShow={handleSession3NoShow}
       handleEditAttendance={handleEditAttendance}
-      getCompletedSession2TimeLeftMs={getCompletedSession2TimeLeftMs}
+      getCompletedSession3TimeLeftMs={getCompletedSession3TimeLeftMs}
       showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
       manualDate2={manualDate2} setManualDate2={setManualDate2}
+      manualDate3={manualDate3} setManualDate3={setManualDate3}
       handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}
       selectedMentorForDate={selectedMentorForDate} setSelectedMentorForDate={setSelectedMentorForDate}
       showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}

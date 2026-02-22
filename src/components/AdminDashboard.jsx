@@ -34,7 +34,7 @@ export default function AdminDashboard({
   handleEditLead, handleSaveEditLead, handleCancelEdit,
   handleReallocateLead, handleDeleteLead,
   // Modals
-  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
+  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showAdminEmailModal, selectedMentorForEmail, setShowAdminEmailModal,
   bulkEmailPreview, setBulkEmailPreview, showBulkEmailPreview, sendBulkEmail,
   emailTemplate, showEmailTemplateEditor, editingTemplate, setEditingTemplate,
@@ -53,7 +53,7 @@ export default function AdminDashboard({
   const [absCurrentPage, setAbsCurrentPage] = useState(1);
   const [absSortBy, setAbsSortBy] = useState('data-desc');
   const absLeaduriPerPage = 10;
-  const absolventiAll = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI);
+  const absolventiAll = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI);
   const absolventiFiltrati = absolventiAll.filter(l =>
     l.nume?.toLowerCase().includes(absSearchQuery.toLowerCase()) ||
     l.telefon?.includes(absSearchQuery) ||
@@ -482,7 +482,7 @@ export default function AdminDashboard({
                 onClick={() => setActiveLeadTab('activi')}
                 className={"px-5 py-2 rounded-xl font-semibold text-sm transition-all border " + (activeLeadTab === 'activi' ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 border-gray-600/50 text-gray-400 hover:bg-gray-700/30')}
               >
-                📋 Leads Activi ({leaduri.filter(l => l.status !== LEAD_STATUS.COMPLET_2_SESIUNI).length})
+                📋 Leads Activi ({leaduri.filter(l => l.status !== LEAD_STATUS.COMPLET_3_SESIUNI).length})
               </button>
               <button
                 onClick={() => { setActiveLeadTab('absolventi'); setAbsCurrentPage(1); }}
@@ -719,7 +719,7 @@ export default function AdminDashboard({
                   <div className="text-center py-12 text-gray-400">
                     <p className="text-5xl mb-4">🎓</p>
                     <p className="text-lg font-semibold text-emerald-300">Niciun absolvent încă</p>
-                    <p className="text-sm mt-2">Leadurile cu status "Complet 2 Sesiuni" vor apărea aici</p>
+                    <p className="text-sm mt-2">Leadurile cu status "Complet 3 Sesiuni" vor apărea aici</p>
                   </div>
                 ) : (
                   <>
@@ -776,6 +776,7 @@ export default function AdminDashboard({
                             <div className="flex gap-2 flex-wrap">
                               {lead.prezenta1 != null && <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta1 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S1 {lead.prezenta1 ? '✅' : '❌'}</span>}
                               {lead.prezenta2 != null && <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S2 {lead.prezenta2 ? '✅' : '❌'}</span>}
+                              {lead.prezenta3 != null && <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta3 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S3 {lead.prezenta3 ? '✅' : '❌'}</span>}
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-700/30">
                               <span>{mentorInfo ? mentorInfo.nume : '-'}</span>
@@ -833,6 +834,7 @@ export default function AdminDashboard({
                                   <div className="flex flex-col gap-1">
                                     {lead.prezenta1 != null && <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta1 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S1 {lead.prezenta1 ? '✅' : '❌'}</span>}
                                     {lead.prezenta2 != null && <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta2 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S2 {lead.prezenta2 ? '✅' : '❌'}</span>}
+                                    {lead.prezenta3 != null && <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta3 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S3 {lead.prezenta3 ? '✅' : '❌'}</span>}
                                   </div>
                                 </td>
                                 <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
@@ -900,14 +902,14 @@ export default function AdminDashboard({
                 📬 Se vor trimite emailuri cu <strong>Oferta VIP ProFX (20€/lună)</strong> către toți absolvenții cu adresă de email.
               </p>
               <p className="text-amber-300 font-semibold mt-2">
-                {(() => { const n = leaduri ? leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI && l.email).length : 0; return `📊 ${n} absolvenți vor primi email`; })()} 
+                {(() => { const n = leaduri ? leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI && l.email).length : 0; return `📊 ${n} absolvenți vor primi email`; })()} 
               </p>
             </div>
 
             <div className="mb-4">
               <p className="text-sm text-gray-400 mb-2">Absolvenți:</p>
               <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 max-h-52 overflow-y-auto space-y-1">
-                {leaduri && leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI).map(lead => (
+                {leaduri && leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI).map(lead => (
                   <button key={lead.id}
                     onClick={() => lead.email ? showVipEmailPreviewFn(lead) : null}
                     disabled={!lead.email}
@@ -944,7 +946,7 @@ export default function AdminDashboard({
             <div className="flex gap-3 pt-3 border-t border-gray-700/50">
               <button onClick={() => { setShowVipEmailModal(false); setVipEmailPreview(null); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-3 px-4 rounded-xl font-semibold transition-all">Anulează</button>
-              <button onClick={sendVipEmails} disabled={loading || !(leaduri && leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_2_SESIUNI && l.email).length > 0)}
+              <button onClick={sendVipEmails} disabled={loading || !(leaduri && leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI && l.email).length > 0)}
                 className="flex-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 py-3 px-4 rounded-xl font-semibold transition-all disabled:opacity-50 flex items-center justify-center gap-2">
                 {loading ? 'Se trimite...' : <><span>💎</span> Trimite Email VIP</>}
               </button>
@@ -1021,11 +1023,16 @@ export default function AdminDashboard({
                 <Input type="datetime-local" value={manualDate2} onChange={(e) => setManualDate2(e.target.value)}
                   className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
               </div>
+              <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-3">
+                <label className="block text-sm font-semibold text-cyan-300 mb-2">📅 Sesiunea 3 <span className="text-xs text-gray-400 font-normal">(opțional)</span></label>
+                <Input type="datetime-local" value={manualDate3} onChange={(e) => setManualDate3(e.target.value)}
+                  className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+              </div>
             </div>
             <div className="flex gap-3">
               <button onClick={handleConfirmDate} disabled={loading}
                 className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-2 px-4 rounded-xl font-semibold transition-all">Confirma</button>
-              <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); }}
+              <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); setManualDate3(''); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-2 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
             </div>
           </div>

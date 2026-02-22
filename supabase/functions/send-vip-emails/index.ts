@@ -33,11 +33,11 @@ serve(async (req) => {
       );
     }
 
-    // Fetch all absolvenți (complet_2_sesiuni) with an email address
+    // Fetch all absolvenți (complet_3_sesiuni) with an email address
     const { data: leads, error: leadsError } = await supabase
       .from("leaduri")
       .select("*")
-      .eq("status", "complet_2_sesiuni");
+      .eq("status", "complet_3_sesiuni");
 
     if (leadsError) {
       return new Response(

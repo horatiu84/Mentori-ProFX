@@ -135,8 +135,10 @@ INSERT INTO users (username, password, role, "mentorId") VALUES
   ('Adrian', 'Adrian', 'mentor', 'adrian')
 ON CONFLICT (username) DO NOTHING;
 
--- ==================== TWO-SESSION PROGRAM COLUMNS ====================
+-- ==================== THREE-SESSION PROGRAM COLUMNS ====================
 -- Run these ALTER TABLE statements in Supabase SQL Editor if upgrading an existing DB
 ALTER TABLE leaduri ADD COLUMN IF NOT EXISTS prezenta1 BOOLEAN DEFAULT NULL;
 ALTER TABLE leaduri ADD COLUMN IF NOT EXISTS prezenta2 BOOLEAN DEFAULT NULL;
+ALTER TABLE leaduri ADD COLUMN IF NOT EXISTS prezenta3 BOOLEAN DEFAULT NULL;
 ALTER TABLE mentori ADD COLUMN IF NOT EXISTS "webinar2Date" TIMESTAMPTZ;
+ALTER TABLE mentori ADD COLUMN IF NOT EXISTS "webinar3Date" TIMESTAMPTZ;

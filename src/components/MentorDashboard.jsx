@@ -23,10 +23,11 @@ export default function MentorDashboard({
   openDateModal,
   handleCompleteLead, handleNoShowLead,
   handleSession2Prezent, handleSession2NoShow,
+  handleSession3Prezent, handleSession3NoShow,
   handleEditAttendance,
-  getCompletedSession2TimeLeftMs,
+  getCompletedSession3TimeLeftMs,
   // Modals
-  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
+  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showModal, modalConfig, closeModal, handleModalConfirm,
 }) {
   // Countdown timer state
@@ -178,6 +179,12 @@ export default function MentorDashboard({
                         ? <p className="text-base font-bold text-blue-400">{formatDate(mentoriData.find(m => m.id === currentMentorId)?.webinar2Date)}</p>
                         : <p className="text-sm text-yellow-400">Nestabilită — setează din modal</p>}
                     </div>
+                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-xl p-4 sm:col-span-2">
+                      <p className="text-xs text-gray-400 mb-1">Sesiunea 3</p>
+                      {mentoriData.find(m => m.id === currentMentorId)?.webinar3Date
+                        ? <p className="text-base font-bold text-cyan-400">{formatDate(mentoriData.find(m => m.id === currentMentorId)?.webinar3Date)}</p>
+                        : <p className="text-sm text-yellow-400">Nestabilită — setează din modal</p>}
+                    </div>
                   </div>
                   <div className="flex justify-end">
                     <button onClick={() => openDateModal(currentMentorId)} disabled={loading}
@@ -260,9 +267,9 @@ export default function MentorDashboard({
                 <div className="space-y-3">
                   {mentorLeaduriCurente.map((lead) => {
                     const badge = getStatusBadge(lead.status);
-                    const completedSession2TimeLeftMs = getCompletedSession2TimeLeftMs ? getCompletedSession2TimeLeftMs(lead) : null;
-                    const completedSession2MinsLeft = completedSession2TimeLeftMs != null ? Math.floor(completedSession2TimeLeftMs / (1000 * 60)) : null;
-                    const completedSession2SecsLeft = completedSession2TimeLeftMs != null ? Math.floor((completedSession2TimeLeftMs % (1000 * 60)) / 1000) : null;
+                    const completedSession3TimeLeftMs = getCompletedSession3TimeLeftMs ? getCompletedSession3TimeLeftMs(lead) : null;
+                    const completedSession3MinsLeft = completedSession3TimeLeftMs != null ? Math.floor(completedSession3TimeLeftMs / (1000 * 60)) : null;
+                    const completedSession3SecsLeft = completedSession3TimeLeftMs != null ? Math.floor((completedSession3TimeLeftMs % (1000 * 60)) / 1000) : null;
                     return (
                       <div key={lead.id} className="bg-gray-800/30 rounded-xl border border-gray-700/50 p-4 hover:border-blue-500/30 transition-all">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -283,6 +290,11 @@ export default function MentorDashboard({
                                   S2 {lead.prezenta2 ? '✅' : '❌'}
                                 </span>
                               )}
+                              {lead.prezenta3 != null && (
+                                <span className={"text-xs px-2 py-1 rounded-full border " + (lead.prezenta3 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>
+                                  S3 {lead.prezenta3 ? '✅' : '❌'}
+                                </span>
+                              )}
                             </div>
                             <div className="flex flex-wrap gap-2 md:gap-4 text-xs md:text-sm text-gray-300">
                               <span>Tel: {lead.telefon}</span>
@@ -301,29 +313,48 @@ export default function MentorDashboard({
                               </>
                             )}
                             {lead.status === LEAD_STATUS.IN_PROGRAM && (() => {
-                              const w2 = mentoriData.find(m => m.id === currentMentorId)?.webinar2Date;
-                              if (!w2) return <span className="text-cyan-400 text-sm px-3 py-2">Așteaptă Sesiunea 2</span>;
-                              const isDay2Ready = new Date(w2).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0);
-                              if (!isDay2Ready) return <span className="text-cyan-400 text-sm px-3 py-2">Sesiunea 2 pe {new Date(w2).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'})}</span>;
-                              if (lead.prezenta2 != null) return null;
-                              return (
-                                <>
-                                  <button onClick={() => handleSession2Prezent(lead.id)} disabled={loading}
-                                    className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">✅ Prezent S2</button>
-                                  <button onClick={() => handleSession2NoShow(lead.id)} disabled={loading}
-                                    className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">❌ No-Show S2</button>
-                                </>
-                              );
+                              if (lead.prezenta2 == null) {
+                                const w2 = mentoriData.find(m => m.id === currentMentorId)?.webinar2Date;
+                                if (!w2) return <span className="text-cyan-400 text-sm px-3 py-2">Așteaptă Sesiunea 2</span>;
+                                const isDay2Ready = new Date(w2).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0);
+                                if (!isDay2Ready) return <span className="text-cyan-400 text-sm px-3 py-2">Sesiunea 2 pe {new Date(w2).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'})}</span>;
+                                return (
+                                  <>
+                                    <button onClick={() => handleSession2Prezent(lead.id)} disabled={loading}
+                                      className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">✅ Prezent S2</button>
+                                    <button onClick={() => handleSession2NoShow(lead.id)} disabled={loading}
+                                      className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">❌ No-Show S2</button>
+                                  </>
+                                );
+                              }
+                              if (lead.prezenta3 == null) {
+                                const w3 = mentoriData.find(m => m.id === currentMentorId)?.webinar3Date;
+                                if (!w3) return <span className="text-cyan-400 text-sm px-3 py-2">Așteaptă Sesiunea 3</span>;
+                                const isDay3Ready = new Date(w3).setHours(0,0,0,0) <= new Date().setHours(0,0,0,0);
+                                if (!isDay3Ready) return <span className="text-cyan-400 text-sm px-3 py-2">Sesiunea 3 pe {new Date(w3).toLocaleDateString('ro-RO', {day:'2-digit', month:'2-digit', year:'numeric'})}</span>;
+                                return (
+                                  <>
+                                    <button onClick={() => handleSession3Prezent(lead.id)} disabled={loading}
+                                      className="bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 text-cyan-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">✅ Prezent S3</button>
+                                    <button onClick={() => handleSession3NoShow(lead.id)} disabled={loading}
+                                      className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-2 rounded-xl text-sm font-semibold transition-all disabled:opacity-50">❌ No-Show S3</button>
+                                  </>
+                                );
+                              }
+                              return null;
                             })()}
-                            {lead.status === LEAD_STATUS.COMPLET_2_SESIUNI && (
+                            {lead.status === LEAD_STATUS.COMPLET_3_SESIUNI && (
                               <span className="text-emerald-400 text-sm font-semibold px-3 py-2">
-                                🏆 Complet 2 Sesiuni
-                                {completedSession2TimeLeftMs != null && (
+                                🏆 Complet 3 Sesiuni
+                                {completedSession3TimeLeftMs != null && (
                                   <span className="ml-2 text-xs text-emerald-300/90">
-                                    (dispare în {String(completedSession2MinsLeft).padStart(2, '0')}:{String(completedSession2SecsLeft).padStart(2, '0')})
+                                    (dispare în {String(completedSession3MinsLeft).padStart(2, '0')}:{String(completedSession3SecsLeft).padStart(2, '0')})
                                   </span>
                                 )}
                               </span>
+                            )}
+                            {lead.status === LEAD_STATUS.COMPLET_2_SESIUNI && (
+                              <span className="text-teal-400 text-sm font-semibold px-3 py-2">✅ Complet 2/3 Sesiuni</span>
                             )}
                             {lead.status === LEAD_STATUS.COMPLET_SESIUNE_FINALA && <span className="text-teal-400 text-sm font-semibold px-3 py-2">✅ Complet S. Finală</span>}
                             {lead.status === LEAD_STATUS.COMPLET_SESIUNE_1 && <span className="text-indigo-400 text-sm font-semibold px-3 py-2">✅ Complet S. 1</span>}
@@ -339,7 +370,7 @@ export default function MentorDashboard({
                             )}
                             {lead.status === LEAD_STATUS.NECONFIRMAT && <span className="text-red-400 text-sm px-3 py-2">Asteapta re-alocare</span>}
                             {/* Edit attendance button — shown when at least one session is already marked */}
-                            {(lead.prezenta1 != null || lead.prezenta2 != null) && (
+                            {(lead.prezenta1 != null || lead.prezenta2 != null || lead.prezenta3 != null) && (
                               <button onClick={() => toggleEditAttendance(lead.id)}
                                 className={"border px-3 py-2 rounded-xl text-xs font-semibold transition-all " + (editingAttendance.has(lead.id) ? 'bg-yellow-500/30 border-yellow-500/50 text-yellow-200' : 'bg-gray-700/30 hover:bg-gray-700/50 border-gray-600/50 text-gray-400')}>
                                 ✏️ {editingAttendance.has(lead.id) ? 'Închide' : 'Editează'}
@@ -374,6 +405,19 @@ export default function MentorDashboard({
                                     </button>
                                     <button onClick={() => { handleEditAttendance(lead.id, 2, false); toggleEditAttendance(lead.id); }} disabled={loading || lead.prezenta2 === false}
                                       className={"px-3 py-1 rounded-lg text-xs font-semibold border transition-all disabled:opacity-40 " + (lead.prezenta2 === false ? 'bg-orange-500/30 border-orange-500/50 text-orange-300 cursor-default' : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300')}>
+                                      ❌ No-Show
+                                    </button>
+                                  </>
+                                )}
+                                {lead.prezenta3 != null && (
+                                  <>
+                                    <span className="text-xs text-gray-400 self-center ml-2">S3:</span>
+                                    <button onClick={() => { handleEditAttendance(lead.id, 3, true); toggleEditAttendance(lead.id); }} disabled={loading || lead.prezenta3 === true}
+                                      className={"px-3 py-1 rounded-lg text-xs font-semibold border transition-all disabled:opacity-40 " + (lead.prezenta3 === true ? 'bg-green-500/30 border-green-500/50 text-green-300 cursor-default' : 'bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-300')}>
+                                      ✅ Prezent
+                                    </button>
+                                    <button onClick={() => { handleEditAttendance(lead.id, 3, false); toggleEditAttendance(lead.id); }} disabled={loading || lead.prezenta3 === false}
+                                      className={"px-3 py-1 rounded-lg text-xs font-semibold border transition-all disabled:opacity-40 " + (lead.prezenta3 === false ? 'bg-orange-500/30 border-orange-500/50 text-orange-300 cursor-default' : 'bg-orange-500/20 hover:bg-orange-500/30 border-orange-500/50 text-orange-300')}>
                                       ❌ No-Show
                                     </button>
                                   </>
@@ -443,22 +487,28 @@ export default function MentorDashboard({
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 max-w-md w-full p-6">
             <h3 className="text-xl font-bold text-white mb-4">📅 Setează Datele Webinarului</h3>
-            <p className="text-sm text-gray-400 mb-4">Alege data și ora pentru Sesiunea 1 și Sesiunea 2</p>
+            <p className="text-sm text-gray-400 mb-4">Alege data și ora pentru Sesiunea 1, Sesiunea 2 și Sesiunea 3</p>
             <div className="mb-4">
               <label className="block text-sm font-medium text-purple-300 mb-2">Sesiunea 1 — Data și Ora:</label>
               <Input type="datetime-local" value={manualDate} onChange={(e) => setManualDate(e.target.value)}
                 className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
             </div>
-            <div className="mb-6">
+            <div className="mb-4">
               <label className="block text-sm font-medium text-blue-300 mb-2">Sesiunea 2 — Data și Ora:</label>
               <Input type="datetime-local" value={manualDate2} onChange={(e) => setManualDate2(e.target.value)}
                 className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
               <p className="text-xs text-gray-500 mt-1">Opțional — poți seta Sesiunea 2 mai târziu</p>
             </div>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-cyan-300 mb-2">Sesiunea 3 — Data și Ora:</label>
+              <Input type="datetime-local" value={manualDate3} onChange={(e) => setManualDate3(e.target.value)}
+                className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+              <p className="text-xs text-gray-500 mt-1">Opțional — poți seta Sesiunea 3 mai târziu</p>
+            </div>
             <div className="flex gap-3">
               <button onClick={handleConfirmDate} disabled={loading}
                 className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-2 px-4 rounded-xl font-semibold transition-all">Salvează</button>
-              <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); }}
+              <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); setManualDate3(''); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-2 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
             </div>
           </div>
