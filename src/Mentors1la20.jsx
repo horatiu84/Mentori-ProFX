@@ -57,8 +57,11 @@ export default function Mentori1La20() {
   const [showManualAllocModal, setShowManualAllocModal] = useState(false);
   const [manualAllocMentor, setManualAllocMentor] = useState('');
   const [manualAllocCount, setManualAllocCount] = useState('');
+  const [mentorCompletionTick, setMentorCompletionTick] = useState(Date.now());
   const isAutoAllocatingRef = useRef(false);
   const lastAutoAllocCheckRef = useRef(0);
+
+  const COMPLETED_2_SESSIONS_HIDE_MS = 60 * 60 * 1000;
 
   // ==================== MODAL HELPERS ====================
   const showAlert = (title, message) => {
@@ -77,10 +80,24 @@ export default function Mentori1La20() {
     closeModal();
   };
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMentorCompletionTick(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ==================== FETCH FUNCTIONS ====================
   
   // Statusuri care înseamnă că programul este activ (mentorul nu poate primi leaduri noi)
   const ACTIVE_PROGRAM_STATUSES = [LEAD_STATUS.ALOCAT, LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM];
+  const FINALIZED_PROGRAM_STATUSES = [
+    LEAD_STATUS.COMPLET,
+    LEAD_STATUS.COMPLET_2_SESIUNI,
+    LEAD_STATUS.COMPLET_SESIUNE_FINALA,
+    LEAD_STATUS.COMPLET_SESIUNE_1
+  ];
+  const isFinalizedProgramLead = (lead) => FINALIZED_PROGRAM_STATUSES.includes(lead?.status);
 
   const fetchMentori = async () => {
     try {
@@ -169,7 +186,7 @@ export default function Mentori1La20() {
       
       for (const alocare of (alocariList || [])) {
         const leaduriReale = (toateLeadurile || []).filter(l => 
-          alocare.leaduri && alocare.leaduri.includes(l.id)
+          alocare.leaduri && alocare.leaduri.includes(l.id) && !isFinalizedProgramLead(l)
         );
         
         const numarRealDeLeaduri = leaduriReale.length;
@@ -1192,6 +1209,13 @@ Echipa ProFX`,
     return LEAD_STATUS.NEALOCAT;
   };
 
+  const getCompletedSession2TimeLeftMs = (lead, nowTs = Date.now()) => {
+    if (!lead || lead.status !== LEAD_STATUS.COMPLET_2_SESIUNI || lead.prezenta2 !== true || !lead.dataOneToTwenty) return null;
+    const completedAtMs = new Date(lead.dataOneToTwenty).getTime();
+    if (Number.isNaN(completedAtMs)) return null;
+    return Math.max(0, COMPLETED_2_SESSIONS_HIDE_MS - (nowTs - completedAtMs));
+  };
+
   const handleSession2Prezent = async (leadId) => {
     showConfirmDialog('Prezent Sesiune 2', 'Marcheaзă leadul ca PREZENT la Sesiunea 2? Aceasta finalizează programul.', async () => {
       setLoading(true);
@@ -1255,6 +1279,9 @@ Echipa ProFX`,
       } else {
         updates.prezenta2 = newValue;
         updates.status = computeFinalStatus(lead.prezenta1, newValue);
+        if (newValue === true) {
+          updates.dataOneToTwenty = new Date().toISOString();
+        }
       }
       await supabase.from('leaduri').update(updates).eq('id', leadId);
       await fetchLeaduri();
@@ -1520,7 +1547,14 @@ Echipa ProFX`,
   const leaduriNoShow = leaduri.filter(l => l.status === LEAD_STATUS.NO_SHOW).length;
   const leaduriComplete = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET).length;
 
-  const mentorLeaduri = currentMentorId ? leaduri.filter(l => l.mentorAlocat === currentMentorId) : [];
+  const mentorLeaduri = currentMentorId
+    ? leaduri
+        .filter(l => l.mentorAlocat === currentMentorId)
+        .filter(l => {
+          const timeLeftMs = getCompletedSession2TimeLeftMs(l, mentorCompletionTick);
+          return timeLeftMs === null || timeLeftMs > 0;
+        })
+    : [];
   const mentorLeaduriAlocate = mentorLeaduri.filter(l => l.status === LEAD_STATUS.ALOCAT).length;
   const mentorLeaduriConfirmate = mentorLeaduri.filter(l => l.status === LEAD_STATUS.CONFIRMAT).length;
   const mentorLeaduriInProgram = mentorLeaduri.filter(l => l.status === LEAD_STATUS.IN_PROGRAM).length;
@@ -1603,7 +1637,7 @@ Echipa ProFX`,
   // Mentor cards
   const mentoriUnici = MENTORI_DISPONIBILI.map(mentorDef => {
     const mentorDB = mentoriData.find(m => m.id === mentorDef.id);
-    const leaduriRealeMentor = leaduri.filter(l => l.mentorAlocat === mentorDef.id).length;
+    const leaduriRealeMentor = leaduri.filter(l => l.mentorAlocat === mentorDef.id && !isFinalizedProgramLead(l)).length;
     return {
       id: mentorDef.id, nume: mentorDef.nume,
       available: mentorDB?.available ?? true,
@@ -1618,7 +1652,7 @@ Echipa ProFX`,
   // Aggregated allocations
   const alocariAggregate = mentoriUnici
     .map(mentor => {
-      const leaduriMentor = leaduri.filter(l => l.mentorAlocat === mentor.id);
+      const leaduriMentor = leaduri.filter(l => l.mentorAlocat === mentor.id && !isFinalizedProgramLead(l));
       if (leaduriMentor.length === 0) return null;
       const primaAlocare = alocariActive
         .filter(a => a.mentorId === mentor.id)
@@ -1712,6 +1746,7 @@ Echipa ProFX`,
       handleCompleteLead={handleCompleteLead} handleNoShowLead={handleNoShowLead}
       handleSession2Prezent={handleSession2Prezent} handleSession2NoShow={handleSession2NoShow}
       handleEditAttendance={handleEditAttendance}
+      getCompletedSession2TimeLeftMs={getCompletedSession2TimeLeftMs}
       showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
       manualDate2={manualDate2} setManualDate2={setManualDate2}
       handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}

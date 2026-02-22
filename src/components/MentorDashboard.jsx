@@ -24,6 +24,7 @@ export default function MentorDashboard({
   handleCompleteLead, handleNoShowLead,
   handleSession2Prezent, handleSession2NoShow,
   handleEditAttendance,
+  getCompletedSession2TimeLeftMs,
   // Modals
   showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showModal, modalConfig, closeModal, handleModalConfirm,
@@ -259,6 +260,9 @@ export default function MentorDashboard({
                 <div className="space-y-3">
                   {mentorLeaduriCurente.map((lead) => {
                     const badge = getStatusBadge(lead.status);
+                    const completedSession2TimeLeftMs = getCompletedSession2TimeLeftMs ? getCompletedSession2TimeLeftMs(lead) : null;
+                    const completedSession2MinsLeft = completedSession2TimeLeftMs != null ? Math.floor(completedSession2TimeLeftMs / (1000 * 60)) : null;
+                    const completedSession2SecsLeft = completedSession2TimeLeftMs != null ? Math.floor((completedSession2TimeLeftMs % (1000 * 60)) / 1000) : null;
                     return (
                       <div key={lead.id} className="bg-gray-800/30 rounded-xl border border-gray-700/50 p-4 hover:border-blue-500/30 transition-all">
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -311,7 +315,16 @@ export default function MentorDashboard({
                                 </>
                               );
                             })()}
-                            {lead.status === LEAD_STATUS.COMPLET_2_SESIUNI && <span className="text-emerald-400 text-sm font-semibold px-3 py-2">🏆 Complet 2 Sesiuni</span>}
+                            {lead.status === LEAD_STATUS.COMPLET_2_SESIUNI && (
+                              <span className="text-emerald-400 text-sm font-semibold px-3 py-2">
+                                🏆 Complet 2 Sesiuni
+                                {completedSession2TimeLeftMs != null && (
+                                  <span className="ml-2 text-xs text-emerald-300/90">
+                                    (dispare în {String(completedSession2MinsLeft).padStart(2, '0')}:{String(completedSession2SecsLeft).padStart(2, '0')})
+                                  </span>
+                                )}
+                              </span>
+                            )}
                             {lead.status === LEAD_STATUS.COMPLET_SESIUNE_FINALA && <span className="text-teal-400 text-sm font-semibold px-3 py-2">✅ Complet S. Finală</span>}
                             {lead.status === LEAD_STATUS.COMPLET_SESIUNE_1 && <span className="text-indigo-400 text-sm font-semibold px-3 py-2">✅ Complet S. 1</span>}
                             {/* Leads vechi (complet/no_show fără prezenta1) — migrare spre noul sistem */}

@@ -70,6 +70,30 @@ export default function AdminDashboard({
   const absIndexOfFirst = absIndexOfLast - absLeaduriPerPage;
   const absolventiCurenti = absolventiSortati.slice(absIndexOfFirst, absIndexOfLast);
 
+  const getMentorDisplayName = (mentorId) => {
+    if (!mentorId) return '-';
+    const mentorConst = MENTORI_DISPONIBILI.find(m => m.id === mentorId);
+    if (mentorConst?.nume) return mentorConst.nume;
+    const mentorDb = (mentoriData || []).find(m => m.id === mentorId);
+    return mentorDb?.nume || mentorId;
+  };
+
+  const getLeadAllocationHistory = (lead) => {
+    const historyMentors = Array.isArray(lead?.istoricMentori)
+      ? lead.istoricMentori.filter(Boolean)
+      : [];
+    const mergedHistory = [...historyMentors];
+    if (lead?.mentorAlocat && mergedHistory[mergedHistory.length - 1] !== lead.mentorAlocat) {
+      mergedHistory.push(lead.mentorAlocat);
+    }
+
+    const mentors = mergedHistory.map(getMentorDisplayName);
+    const fallbackAllocations = (lead?.numarReAlocari || 0) + (lead?.mentorAlocat ? 1 : 0);
+    const totalAllocations = Math.max(mentors.length, fallbackAllocations);
+
+    return { totalAllocations, mentors };
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900">
       <div className="max-w-7xl mx-auto pt-10 space-y-6 text-white px-4 pb-10">
@@ -402,10 +426,6 @@ export default function AdminDashboard({
                           className="bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/50 text-yellow-300 px-3 py-1.5 rounded-lg text-sm transition-all disabled:opacity-50">
                           Dezalocare
                         </button>
-                        <button onClick={() => stergeLaeduriMentor(alocare)} disabled={loading}
-                          className="bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-3 py-1.5 rounded-lg text-sm transition-all disabled:opacity-50">
-                          Sterge
-                        </button>
                         <button onClick={() => setSelectedMentor(selectedMentor === alocare.id ? null : alocare.id)}
                           className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-sm transition-all">
                           {selectedMentor === alocare.id ? 'Ascunde' : 'Vezi Leaduri'}
@@ -497,6 +517,7 @@ export default function AdminDashboard({
                 <div className="block md:hidden space-y-3">
                   {leaduriCurente.map((lead, index) => {
                     const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                    const allocationInfo = getLeadAllocationHistory(lead);
                     const isEd = editingLead === lead.id;
                     const badge = getStatusBadge(lead.status);
                     return (
@@ -545,6 +566,12 @@ export default function AdminDashboard({
                           <span>{mentorInfo ? mentorInfo.nume : '-'}</span>
                           <span>{formatDate(lead.createdAt)}</span>
                         </div>
+                        <div className="text-xs text-gray-300 bg-gray-900/30 border border-gray-700/40 rounded-lg p-2">
+                          <p className="font-semibold text-blue-300">Alocări: {allocationInfo.totalAllocations}</p>
+                          <p className="text-gray-400 wrap-break-word">
+                            Istoric: {allocationInfo.mentors.length > 0 ? allocationInfo.mentors.join(' → ') : '-'}
+                          </p>
+                        </div>
                         <div className="flex flex-wrap gap-2">
                           {isEd ? (
                             <>
@@ -581,6 +608,7 @@ export default function AdminDashboard({
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Email</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Status</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Mentor</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Istoric Alocări</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Data</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Actiuni</th>
                       </tr>
@@ -588,6 +616,7 @@ export default function AdminDashboard({
                     <tbody className="divide-y divide-gray-700/30">
                       {leaduriCurente.map((lead, index) => {
                         const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                        const allocationInfo = getLeadAllocationHistory(lead);
                         const isEd = editingLead === lead.id;
                         const badge = getStatusBadge(lead.status);
                         return (
@@ -621,6 +650,14 @@ export default function AdminDashboard({
                               </div>
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
+                            <td className="px-4 py-3 text-sm text-gray-300 min-w-55">
+                              <div className="space-y-1">
+                                <p className="text-blue-300 font-semibold">{allocationInfo.totalAllocations} alocări</p>
+                                <p className="text-xs text-gray-400 wrap-break-word">
+                                  {allocationInfo.mentors.length > 0 ? allocationInfo.mentors.join(' → ') : '-'}
+                                </p>
+                              </div>
+                            </td>
                             <td className="px-4 py-3 text-sm text-gray-400">{formatDate(lead.createdAt)}</td>
                             <td className="px-4 py-3 text-sm">
                               {isEd ? (
