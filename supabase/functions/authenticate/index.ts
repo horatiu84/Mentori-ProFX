@@ -27,6 +27,24 @@ serve(async (req) => {
       );
     }
 
+    // Validare lungime input pentru a preveni abuse
+    if (typeof username !== 'string' || typeof password !== 'string' ||
+        username.length > 50 || password.length > 128) {
+      return new Response(
+        JSON.stringify({ error: "Invalid input" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Sanitizare username - doar caractere alfanumerice, punct, underscore, liniuță
+    const sanitizedUsername = username.replace(/[^a-zA-Z0-9._\-]/g, '');
+    if (sanitizedUsername !== username || sanitizedUsername.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Invalid username format" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Initialize Supabase client with service role key (bypasses RLS)
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -34,11 +52,11 @@ serve(async (req) => {
     const { data: user, error: userError } = await supabase
       .from("users")
       .select("*")
-      .eq("username", username)
+      .eq("username", sanitizedUsername)
       .single();
 
     if (userError || !user) {
-      console.log("User not found:", username);
+      console.log("User not found:", sanitizedUsername);
       return new Response(
         JSON.stringify({ error: "Invalid username or password" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -48,7 +66,7 @@ serve(async (req) => {
     // Verify password (TODO: This should be hashed comparison!)
     // For now, we do plain text comparison for backward compatibility
     if (user.password !== password) {
-      console.log("Invalid password for user:", username);
+      console.log("Invalid password for user:", sanitizedUsername);
       return new Response(
         JSON.stringify({ error: "Invalid username or password" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -56,7 +74,7 @@ serve(async (req) => {
     }
 
     // Authentication successful
-    console.log(`✅ User authenticated: ${username} (${user.role})`);
+    console.log(`✅ User authenticated: ${sanitizedUsername} (${user.role})`);
 
     // Return user data (without password!)
     return new Response(
@@ -73,11 +91,9 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("❌ Error in login:", error);
-    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
       JSON.stringify({
         error: "Authentication failed",
-        details: errorMessage,
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

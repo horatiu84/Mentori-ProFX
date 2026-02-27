@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { sanitizeText, sanitizeEmail, sanitizePhone, containsSuspiciousContent } from '../utils/sanitize';
 import logo from '../logo2.png';
+
+// Rate limiting: minim 3 secunde între submisii
+const SUBMIT_COOLDOWN_MS = 3000;
 
 const LEAD_STATUS = {
   NEALOCAT: 'nealocat',
@@ -22,6 +26,7 @@ export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const lastSubmitTime = useRef(0);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -77,28 +82,49 @@ export default function RegisterForm() {
     setError('');
     setSuccess(false);
 
+    // Rate limiting
+    const now = Date.now();
+    if (now - lastSubmitTime.current < SUBMIT_COOLDOWN_MS) {
+      setError('Te rugăm să aștepți câteva secunde înainte de a trimite din nou.');
+      return;
+    }
+    lastSubmitTime.current = now;
+
+    // Sanitizare input
+    const sanitizedNume = sanitizeText(formData.nume, 100);
+    const sanitizedTelefon = sanitizePhone(formData.telefon);
+    const sanitizedEmail = sanitizeEmail(formData.email);
+
+    // Verificare conținut suspect (code injection)
+    if (containsSuspiciousContent(formData.nume) || 
+        containsSuspiciousContent(formData.email) || 
+        containsSuspiciousContent(formData.telefon)) {
+      setError('Datele introduse conțin caractere nepermise.');
+      return;
+    }
+
     // Validări
-    if (!formData.nume.trim()) {
+    if (!sanitizedNume) {
       setError('Te rugăm să introduci numele complet');
       return;
     }
 
-    if (!formData.telefon.trim()) {
+    if (!sanitizedTelefon) {
       setError('Te rugăm să introduci numărul de telefon');
       return;
     }
 
-    if (!validatePhone(formData.telefon)) {
+    if (!validatePhone(sanitizedTelefon)) {
       setError('Numărul de telefon trebuie să conțină 10 cifre');
       return;
     }
 
-    if (!formData.email.trim()) {
+    if (!sanitizedEmail) {
       setError('Te rugăm să introduci adresa de email');
       return;
     }
 
-    if (!validateEmail(formData.email)) {
+    if (!validateEmail(sanitizedEmail)) {
       setError('Te rugăm să introduci o adresă de email validă');
       return;
     }
@@ -107,7 +133,7 @@ export default function RegisterForm() {
 
     try {
       // Verificăm duplicate
-      const duplicateCheck = await checkDuplicateLead(formData.email, formData.telefon);
+      const duplicateCheck = await checkDuplicateLead(sanitizedEmail, sanitizedTelefon);
       
       if (duplicateCheck.isDuplicate) {
         setError(duplicateCheck.message);
@@ -115,13 +141,13 @@ export default function RegisterForm() {
         return;
       }
 
-      // Adăugăm leadul în baza de date
+      // Adăugăm leadul în baza de date (cu date sanitizate)
       const { error: insertError } = await supabase
         .from('leaduri')
         .insert({
-          nume: formData.nume.trim(),
-          telefon: formData.telefon.trim(),
-          email: formData.email.toLowerCase().trim(),
+          nume: sanitizedNume,
+          telefon: sanitizedTelefon,
+          email: sanitizedEmail,
           status: LEAD_STATUS.NEALOCAT,
           mentorAlocat: null,
           alocareId: null,
@@ -221,6 +247,8 @@ export default function RegisterForm() {
                 value={formData.nume}
                 onChange={handleInputChange}
                 placeholder="Ex: Ion Popescu"
+                maxLength={100}
+                autoComplete="name"
                 className="w-full p-4 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 disabled={loading}
               />
@@ -238,6 +266,10 @@ export default function RegisterForm() {
                 value={formData.telefon}
                 onChange={handleInputChange}
                 placeholder="Ex: 0712345678"
+                maxLength={15}
+                autoComplete="tel"
+                pattern="[0-9]*"
+                inputMode="numeric"
                 className="w-full p-4 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 disabled={loading}
               />
@@ -256,6 +288,8 @@ export default function RegisterForm() {
                 value={formData.email}
                 onChange={handleInputChange}
                 placeholder="Ex: ion.popescu@email.com"
+                maxLength={254}
+                autoComplete="email"
                 className="w-full p-4 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 disabled={loading}
               />

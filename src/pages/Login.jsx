@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { sanitizeUsername, containsSuspiciousContent } from '../utils/sanitize';
 import logo from '../logo2.png';
+
+// Rate limiting: maxim 5 încercări, apoi lockout 30 secunde
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 30000;
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,10 +15,40 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lockedUntil, setLockedUntil] = useState(0);
+  const attemptCount = useRef(0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+
+    // Verificare lockout
+    const now = Date.now();
+    if (now < lockedUntil) {
+      const secondsLeft = Math.ceil((lockedUntil - now) / 1000);
+      setError(`Prea multe încercări. Încearcă din nou în ${secondsLeft} secunde.`);
+      return;
+    }
+
+    // Sanitizare username
+    const sanitizedUsername = sanitizeUsername(username);
+
+    // Verificare conținut suspect
+    if (containsSuspiciousContent(username) || containsSuspiciousContent(password)) {
+      setError('Datele introduse conțin caractere nepermise.');
+      return;
+    }
+
+    if (!sanitizedUsername) {
+      setError('Te rugăm să introduci un username valid.');
+      return;
+    }
+
+    if (!password || password.length > 128) {
+      setError('Parola introdusă nu este validă.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -27,17 +62,28 @@ export default function Login() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
           },
-          body: JSON.stringify({ username, password })
+          body: JSON.stringify({ username: sanitizedUsername, password })
         }
       );
 
       const result = await response.json();
 
       if (!response.ok) {
-        setError(result.error || 'Username sau parolă greșită!');
+        // Incrementare contor încercări eșuate
+        attemptCount.current += 1;
+        if (attemptCount.current >= MAX_ATTEMPTS) {
+          setLockedUntil(Date.now() + LOCKOUT_DURATION_MS);
+          attemptCount.current = 0;
+          setError(`Prea multe încercări eșuate. Contul este blocat temporar pentru 30 de secunde.`);
+        } else {
+          setError(result.error || 'Username sau parolă greșită!');
+        }
         setLoading(false);
         return;
       }
+
+      // Reset contor la succes
+      attemptCount.current = 0;
 
       // Autentificare reușită - salvăm datele în localStorage
       const userData = result.user;
@@ -101,8 +147,10 @@ export default function Login() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Introduceți username-ul"
+                maxLength={50}
+                autoComplete="username"
                 className="w-full p-4 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                disabled={loading}
+                disabled={loading || Date.now() < lockedUntil}
                 required
               />
             </div>
@@ -118,8 +166,10 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Introduceți parola"
+                maxLength={128}
+                autoComplete="current-password"
                 className="w-full p-4 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white placeholder-gray-500 focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                disabled={loading}
+                disabled={loading || Date.now() < lockedUntil}
                 required
               />
             </div>
