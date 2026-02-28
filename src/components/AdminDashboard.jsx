@@ -46,12 +46,15 @@ export default function AdminDashboard({
   openVipEmailTemplateEditor, saveVipEmailTemplate,
   vipEmailPreview, setVipEmailPreview,
   showVipEmailPreviewFn, sendVipEmails,
+  usersAccounts, loadingUsersAccounts, fetchUsersAccounts, updateUserCredentials,
   showModal, modalConfig, closeModal, handleModalConfirm,
 }) {
+  const [activeMainTab, setActiveMainTab] = useState('leaduri');
   const [activeLeadTab, setActiveLeadTab] = useState('activi');
   const [absSearchQuery, setAbsSearchQuery] = useState('');
   const [absCurrentPage, setAbsCurrentPage] = useState(1);
   const [absSortBy, setAbsSortBy] = useState('data-desc');
+  const [accountForms, setAccountForms] = useState({});
   const absLeaduriPerPage = 10;
   const absolventiAll = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI);
   const absolventiFiltrati = absolventiAll.filter(l =>
@@ -92,6 +95,50 @@ export default function AdminDashboard({
     const totalAllocations = Math.max(mentors.length, fallbackAllocations);
 
     return { totalAllocations, mentors };
+  };
+
+  const getAccountForm = (account) => {
+    return accountForms[account.id] || {
+      newUsername: account.username || '',
+      oldPassword: '',
+      newPassword: ''
+    };
+  };
+
+  const updateAccountForm = (accountId, patch) => {
+    setAccountForms(prev => ({
+      ...prev,
+      [accountId]: {
+        ...(prev[accountId] || {}),
+        ...patch,
+      }
+    }));
+  };
+
+  const submitAccountUpdate = async (account) => {
+    const form = getAccountForm(account);
+    if (!form.oldPassword || !form.newPassword) {
+      setError('Pentru actualizare sunt obligatorii parola veche și parola nouă.');
+      return;
+    }
+
+    const ok = await updateUserCredentials({
+      targetUsername: account.username,
+      oldPassword: form.oldPassword,
+      newPassword: form.newPassword,
+      newUsername: form.newUsername,
+    });
+
+    if (!ok) return;
+
+    setAccountForms(prev => ({
+      ...prev,
+      [account.id]: {
+        newUsername: (form.newUsername || '').trim(),
+        oldPassword: '',
+        newPassword: '',
+      }
+    }));
   };
 
   return (
@@ -137,7 +184,120 @@ export default function AdminDashboard({
           </div>
         )}
 
+        <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setActiveMainTab('leaduri')}
+                className={"px-5 py-2 rounded-xl font-semibold text-sm transition-all border " + (activeMainTab === 'leaduri' ? 'bg-blue-500/30 border-blue-500/50 text-blue-300' : 'bg-gray-700/20 border-gray-600/50 text-gray-400 hover:bg-gray-700/30')}
+              >
+                📋 Administrare Leaduri
+              </button>
+              <button
+                onClick={() => setActiveMainTab('conturi')}
+                className={"px-5 py-2 rounded-xl font-semibold text-sm transition-all border " + (activeMainTab === 'conturi' ? 'bg-fuchsia-500/30 border-fuchsia-500/50 text-fuchsia-300' : 'bg-gray-700/20 border-gray-600/50 text-gray-400 hover:bg-gray-700/30')}
+              >
+                🔐 Administrare Conturi
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Accounts Section */}
+        {activeMainTab === 'conturi' && (
+        <Card className="bg-gray-900/50 backdrop-blur-sm border border-fuchsia-700/40 shadow-2xl">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-fuchsia-300">Administrare Conturi Utilizatori</h2>
+                <p className="text-sm text-gray-400">Actualizezi username-ul și parola pentru admin + mentori (parola veche este obligatorie).</p>
+              </div>
+              <button
+                onClick={fetchUsersAccounts}
+                disabled={loadingUsersAccounts || loading}
+                className={"px-4 py-2 rounded-xl border text-sm font-semibold transition-all " + ((loadingUsersAccounts || loading) ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border-fuchsia-500/50 text-fuchsia-300')}
+              >
+                {loadingUsersAccounts ? 'Se încarcă...' : 'Refresh Conturi'}
+              </button>
+            </div>
+
+            {!usersAccounts || usersAccounts.length === 0 ? (
+              <div className="text-center py-10 text-gray-400 border border-gray-700/40 rounded-xl bg-gray-800/20">
+                <p className="text-lg">Nu există conturi disponibile.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {[...usersAccounts]
+                  .sort((a, b) => {
+                    if (a.role === 'admin' && b.role !== 'admin') return -1;
+                    if (a.role !== 'admin' && b.role === 'admin') return 1;
+                    return (a.username || '').localeCompare(b.username || '');
+                  })
+                  .map(account => {
+                    const form = getAccountForm(account);
+                    return (
+                      <div key={account.id} className="bg-gray-800/40 border border-gray-700/50 rounded-xl p-4">
+                        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+                          <div>
+                            <p className="text-white font-bold text-base">{account.username}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={"px-2 py-0.5 text-xs rounded-full border " + (account.role === 'admin' ? 'bg-red-500/20 border-red-500/50 text-red-300' : 'bg-blue-500/20 border-blue-500/50 text-blue-300')}>
+                                {account.role === 'admin' ? 'ADMIN' : 'MENTOR'}
+                              </span>
+                              {account.mentorId && (
+                                <span className="px-2 py-0.5 text-xs rounded-full border bg-cyan-500/20 border-cyan-500/50 text-cyan-300">
+                                  mentorId: {account.mentorId}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <Input
+                            type="text"
+                            value={form.newUsername}
+                            onChange={(e) => updateAccountForm(account.id, { newUsername: e.target.value })}
+                            placeholder="Username nou"
+                            className="p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white"
+                          />
+                          <Input
+                            type="password"
+                            value={form.oldPassword}
+                            onChange={(e) => updateAccountForm(account.id, { oldPassword: e.target.value })}
+                            placeholder="Parola veche"
+                            className="p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white"
+                          />
+                          <Input
+                            type="password"
+                            value={form.newPassword}
+                            onChange={(e) => updateAccountForm(account.id, { newPassword: e.target.value })}
+                            placeholder="Parola nouă"
+                            className="p-3 rounded-xl border border-gray-600/50 bg-gray-800/50 text-white"
+                          />
+                        </div>
+
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => submitAccountUpdate(account)}
+                            disabled={loading}
+                            className={"px-4 py-2 rounded-xl text-sm font-semibold border transition-all " + (loading ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border-fuchsia-500/50 text-fuchsia-300')}
+                          >
+                            🔐 Actualizează contul
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        )}
+
         {/* Statistics */}
+        {activeMainTab === 'leaduri' && (
+        <>
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-6">
             <h2 className="text-xl font-bold text-yellow-400 mb-4">Statistici Generale</h2>
@@ -884,6 +1044,8 @@ export default function AdminDashboard({
             )}
           </CardContent>
         </Card>
+        </>
+        )}
       </div>
 
       {/* VIP Email Modal */}

@@ -77,8 +77,9 @@ serve(async (req) => {
       );
     }
 
-    const sanitizedUsername = username.replace(/[^a-zA-Z0-9._\-]/g, "");
-    if (sanitizedUsername !== username || sanitizedUsername.length === 0 || sanitizedUsername.length > 50) {
+    const normalizedUsername = username.replace(/\s+/g, " ").trim();
+    const sanitizedUsername = normalizedUsername.replace(/[^\p{L}\p{N}._\-\s]/gu, "");
+    if (sanitizedUsername !== normalizedUsername || sanitizedUsername.length === 0 || sanitizedUsername.length > 80) {
       return new Response(
         JSON.stringify({ error: "Invalid username format" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

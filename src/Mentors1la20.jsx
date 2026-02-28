@@ -59,6 +59,8 @@ export default function Mentori1La20() {
   const [showManualAllocModal, setShowManualAllocModal] = useState(false);
   const [manualAllocMentor, setManualAllocMentor] = useState('');
   const [manualAllocCount, setManualAllocCount] = useState('');
+  const [usersAccounts, setUsersAccounts] = useState([]);
+  const [loadingUsersAccounts, setLoadingUsersAccounts] = useState(false);
   const isAutoAllocatingRef = useRef(false);
   const lastAutoAllocCheckRef = useRef(0);
 
@@ -327,6 +329,70 @@ Echipa ProFX`,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const fetchUsersAccounts = useCallback(async () => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setUsersAccounts([]);
+      return;
+    }
+
+    setLoadingUsersAccounts(true);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/manage-users`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Nu s-au putut încărca conturile');
+      setUsersAccounts(Array.isArray(result.users) ? result.users : []);
+    } catch (err) {
+      console.error('Eroare la încărcarea conturilor:', err);
+      setError('Eroare la încărcarea conturilor utilizatorilor');
+    } finally {
+      setLoadingUsersAccounts(false);
+    }
+  }, []);
+
+  const updateUserCredentials = async ({ targetUsername, oldPassword, newPassword, newUsername }) => {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      setError('Sesiune invalidă. Reautentifică-te.');
+      return false;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetch(`${supabaseUrl}/functions/v1/manage-users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ targetUsername, oldPassword, newPassword, newUsername }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Actualizarea contului a eșuat');
+
+      await fetchUsersAccounts();
+      setSuccess(`Credențialele pentru "${result.user?.username || targetUsername}" au fost actualizate cu succes!`);
+      return true;
+    } catch (err) {
+      setError('Eroare la actualizarea contului: ' + (err.message || ''));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ==================== AUTO-ALLOCATE ====================
   const checkAndAutoAllocate = useCallback(async () => {
     let modificari = false;
@@ -535,6 +601,12 @@ Echipa ProFX`,
   }, [isAuthenticated, fetchAllData]);
 
   useEffect(() => {
+    if (isAuthenticated && currentRole === 'admin') {
+      fetchUsersAccounts();
+    }
+  }, [isAuthenticated, currentRole, fetchUsersAccounts]);
+
+  useEffect(() => {
     const now = Date.now();
     const timeSinceLastCheck = now - lastAutoAllocCheckRef.current;
     
@@ -565,6 +637,7 @@ Echipa ProFX`,
     setCurrentMentor(null); 
     setCurrentRole(null);
     setCurrentMentorId(null);
+    setUsersAccounts([]);
     clearStoredAuth();
     navigate('/login');
   };
@@ -1778,6 +1851,10 @@ Echipa ProFX`,
         openVipEmailTemplateEditor={openVipEmailTemplateEditor} saveVipEmailTemplate={saveVipEmailTemplate}
         vipEmailPreview={vipEmailPreview} setVipEmailPreview={setVipEmailPreview}
         showVipEmailPreviewFn={showVipEmailPreviewFn} sendVipEmails={sendVipEmails}
+        usersAccounts={usersAccounts}
+        loadingUsersAccounts={loadingUsersAccounts}
+        fetchUsersAccounts={fetchUsersAccounts}
+        updateUserCredentials={updateUserCredentials}
         showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
       />
     );

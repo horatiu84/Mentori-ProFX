@@ -68,7 +68,8 @@ export function sanitizeUsername(username) {
   if (typeof username !== 'string') return '';
 
   return username
-    .replace(/[^a-zA-Z0-9._-]/g, '')
+    .replace(/[^a-zA-Z0-9._\-\s]/g, '')
+    .replace(/\s+/g, ' ')
     .slice(0, 50)
     .trim();
 }
