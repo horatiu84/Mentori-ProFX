@@ -8,7 +8,9 @@ export default function ProtectedRoute({ children }) {
   useEffect(() => {
     // Verificăm token-ul JWT
     const token = localStorage.getItem('authToken');
-    const valid = isTokenValid(token);
+    const validToken = isTokenValid(token);
+    const legacyAuth = localStorage.getItem('isAuthenticated') === 'true';
+    const valid = validToken || legacyAuth;
     if (!valid) clearStoredAuth();
     setIsAuthenticated(valid);
   }, []);

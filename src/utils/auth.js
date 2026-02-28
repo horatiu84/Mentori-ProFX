@@ -47,6 +47,13 @@ export function saveAuthSession(token, user) {
   localStorage.setItem('currentMentorId', user?.mentorId || '');
 }
 
+export function saveLegacySession(user) {
+  localStorage.setItem('isAuthenticated', 'true');
+  localStorage.setItem('currentUser', user?.username || '');
+  localStorage.setItem('currentRole', user?.role || '');
+  localStorage.setItem('currentMentorId', user?.mentorId || '');
+}
+
 export function getAuthUserFromToken(token) {
   const payload = decodeJwtPayload(token);
   if (!payload) return null;

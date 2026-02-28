@@ -506,16 +506,28 @@ Echipa ProFX`,
     const token = localStorage.getItem('authToken');
     const validToken = isTokenValid(token);
 
-    if (!validToken) {
-      clearStoredAuth();
+    if (validToken) {
+      const tokenUser = getAuthUserFromToken(token);
+      setIsAuthenticated(true);
+      setCurrentMentor(tokenUser?.username || localStorage.getItem('currentUser') || '');
+      setCurrentRole(tokenUser?.role || localStorage.getItem('currentRole') || '');
+      setCurrentMentorId(tokenUser?.mentorId || localStorage.getItem('currentMentorId') || null);
       return;
     }
 
-    const tokenUser = getAuthUserFromToken(token);
-    setIsAuthenticated(true);
-    setCurrentMentor(tokenUser?.username || localStorage.getItem('currentUser') || '');
-    setCurrentRole(tokenUser?.role || localStorage.getItem('currentRole') || '');
-    setCurrentMentorId(tokenUser?.mentorId || localStorage.getItem('currentMentorId') || null);
+    const legacyAuth = localStorage.getItem('isAuthenticated') === 'true';
+    const legacyUser = localStorage.getItem('currentUser') || '';
+    const legacyRole = localStorage.getItem('currentRole') || '';
+
+    if (legacyAuth && legacyUser && legacyRole) {
+      setIsAuthenticated(true);
+      setCurrentMentor(legacyUser);
+      setCurrentRole(legacyRole);
+      setCurrentMentorId(localStorage.getItem('currentMentorId') || null);
+      return;
+    }
+
+    clearStoredAuth();
   }, []);
 
   useEffect(() => {

@@ -1,14 +1,16 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { sanitizeUsername, containsSuspiciousContent } from '../utils/sanitize';
-import { saveAuthSession } from '../utils/auth';
+import { saveAuthSession, saveLegacySession } from '../utils/auth';
 import logo from '../logo2.png';
 
 // Rate limiting: maxim 5 încercări, apoi lockout 30 secunde
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_DURATION_MS = 30000;
+const AUTH_REQUEST_TIMEOUT_MS = 35000;
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,6 +20,27 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [lockedUntil, setLockedUntil] = useState(0);
   const attemptCount = useRef(0);
+
+  const authenticateWithTimeout = async (supabaseUrl, payload, timeoutMs) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/authenticate`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }
+      );
+      return response;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,21 +76,73 @@ export default function Login() {
     setLoading(true);
 
     try {
+      // FAST PATH: authenticate directly via DB RPC (avoids slow edge cold starts)
+      const { data: fastAuthRows, error: fastAuthError } = await supabase.rpc('auth_login', {
+        p_username: sanitizedUsername,
+        p_password: password
+      });
+
+      const fastUser = Array.isArray(fastAuthRows) && fastAuthRows.length > 0 ? fastAuthRows[0] : null;
+
+      if (fastAuthError) {
+        console.warn('Fast auth RPC failed, fallback to edge authenticate:', fastAuthError.message);
+      }
+
+      if (fastUser) {
+        const userData = {
+          username: fastUser.username,
+          role: fastUser.role,
+          mentorId: fastUser.mentorId || '',
+          id: fastUser.id,
+        };
+
+        saveLegacySession(userData);
+        attemptCount.current = 0;
+
+        // Token hydration in background (needed for protected admin edge functions)
+        void (async () => {
+          try {
+            const supabaseUrlBg = import.meta.env.VITE_SUPABASE_URL;
+            const responseBg = await authenticateWithTimeout(
+              supabaseUrlBg,
+              { username: sanitizedUsername, password },
+              AUTH_REQUEST_TIMEOUT_MS
+            );
+
+            if (!responseBg.ok) return;
+            const resultBg = await responseBg.json();
+            if (resultBg?.accessToken) {
+              saveAuthSession(resultBg.accessToken, userData);
+            }
+          } catch {
+            // silent: fast login already succeeded
+          }
+        })();
+
+        setLoading(false);
+        navigate('/admin');
+        return;
+      }
+
+      // FALLBACK: edge authenticate
       // Call authentication Edge Function (secure - doesn't expose users table)
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(
-        `${supabaseUrl}/functions/v1/authenticate`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({ username: sanitizedUsername, password })
-        }
-      );
+      const payload = { username: sanitizedUsername, password };
 
-      const result = await response.json();
+      let response;
+      try {
+        response = await authenticateWithTimeout(supabaseUrl, payload, AUTH_REQUEST_TIMEOUT_MS);
+      } catch (firstErr) {
+        if (firstErr?.name !== 'AbortError') throw firstErr;
+        response = await authenticateWithTimeout(supabaseUrl, payload, AUTH_REQUEST_TIMEOUT_MS);
+      }
+
+      let result = {};
+      try {
+        result = await response.json();
+      } catch {
+        result = { error: 'Răspuns invalid de la server' };
+      }
 
       if (!response.ok) {
         // Incrementare contor încercări eșuate
@@ -79,7 +154,6 @@ export default function Login() {
         } else {
           setError(result.error || 'Username sau parolă greșită!');
         }
-        setLoading(false);
         return;
       }
 
@@ -97,10 +171,16 @@ export default function Login() {
       saveAuthSession(result.accessToken, userData);
       
       // Redirecționăm la dashboard
+      setLoading(false);
       navigate('/admin');
     } catch (err) {
       console.error('Eroare la autentificare:', err);
-      setError('A apărut o eroare la autentificare. Te rugăm să încerci din nou.');
+      if (err?.name === 'AbortError') {
+        setError('Serverul răspunde prea greu. Încearcă din nou în câteva secunde.');
+      } else {
+        setError('A apărut o eroare la autentificare. Te rugăm să încerci din nou.');
+      }
+    } finally {
       setLoading(false);
     }
   };

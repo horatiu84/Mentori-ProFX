@@ -107,18 +107,27 @@ serve(async (req) => {
       );
     }
 
-    const newPasswordHash = bcrypt.hashSync(newPassword, 12);
+    const { data: resetOk, error: updateError } = await supabase
+      .rpc("admin_reset_password", {
+        p_username: user.username,
+        p_new_password: newPassword,
+      });
 
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({ password: newPasswordHash })
-      .eq("id", user.id);
+    if (updateError || !resetOk) {
+      console.warn("admin_reset_password RPC unavailable, using fallback reset path:", updateError?.message || "No row updated");
 
-    if (updateError) {
-      return new Response(
-        JSON.stringify({ error: "Failed to update password", details: updateError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const newPasswordHash = bcrypt.hashSync(newPassword, 12);
+      const { error: fallbackUpdateError } = await supabase
+        .from("users")
+        .update({ password: newPasswordHash })
+        .eq("id", user.id);
+
+      if (fallbackUpdateError) {
+        return new Response(
+          JSON.stringify({ error: "Failed to update password", details: fallbackUpdateError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     return new Response(
