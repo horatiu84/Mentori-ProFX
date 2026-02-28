@@ -1,10 +1,12 @@
 /* eslint-disable no-undef */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { jwtVerify } from "https://esm.sh/jose@5.9.6";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const AUTH_JWT_SECRET = Deno.env.get("AUTH_JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET") || Deno.env.get("JWT_SECRET");
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +19,44 @@ serve(async (req) => {
   }
 
   try {
+    if (!AUTH_JWT_SECRET) {
+      return new Response(
+        JSON.stringify({ error: "Auth misconfiguration" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let claims: Record<string, unknown> = {};
+    try {
+      const secret = new TextEncoder().encode(AUTH_JWT_SECRET);
+      const { payload } = await jwtVerify(token, secret, {
+        issuer: "profx-webinarii",
+        audience: "authenticated",
+      });
+      claims = payload;
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (claims.app_role !== "admin") {
+      return new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
     // Fetch the VIP email template

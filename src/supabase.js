@@ -7,4 +7,10 @@ if (!supabaseUrl || !supabaseKey) {
   console.error('Missing Supabase environment variables! Check .env file.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  global: {
+    // Keep Supabase REST requests on project anon/publishable key.
+    // App JWT is only for custom edge functions authorization.
+    fetch: (url, options = {}) => fetch(url, options)
+  }
+});

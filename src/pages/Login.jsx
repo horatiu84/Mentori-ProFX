@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { sanitizeUsername, containsSuspiciousContent } from '../utils/sanitize';
+import { saveAuthSession } from '../utils/auth';
 import logo from '../logo2.png';
 
 // Rate limiting: maxim 5 încercări, apoi lockout 30 secunde
@@ -85,12 +86,15 @@ export default function Login() {
       // Reset contor la succes
       attemptCount.current = 0;
 
-      // Autentificare reușită - salvăm datele în localStorage
+      // Autentificare reușită - salvăm token + date user în localStorage
       const userData = result.user;
-      localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('currentUser', userData.username);
-      localStorage.setItem('currentRole', userData.role);
-      localStorage.setItem('currentMentorId', userData.mentorId || '');
+      if (!result.accessToken) {
+        setError('Răspuns de autentificare invalid (lipsește token-ul).');
+        setLoading(false);
+        return;
+      }
+
+      saveAuthSession(result.accessToken, userData);
       
       // Redirecționăm la dashboard
       navigate('/admin');

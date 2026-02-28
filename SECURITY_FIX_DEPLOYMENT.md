@@ -13,21 +13,33 @@ Your Supabase database has **CRITICAL security vulnerabilities**:
 ### Files Created/Modified:
 
 1. **`supabase-security-fix.sql`** - Enables RLS and creates security policies
+2. **`supabase-password-hash-migration.sql`** - Hashes existing plaintext passwords
 2. **`supabase/functions/authenticate/index.ts`** - New secure login Edge Function
+3. **`supabase/functions/reset-password/index.ts`** - Admin-only password reset Edge Function
 3. **`src/pages/Login.jsx`** - Updated to use secure authentication
 4. **`supabase/functions/send-bulk-emails/index.ts`** - Already fixed with rate limiting
 
 ## 📋 DEPLOYMENT STEPS (MUST FOLLOW IN ORDER!)
 
-### Step 1: Deploy the Authentication Function
+### Step 1: Deploy Edge Functions
 
 ```bash
 npx supabase functions deploy authenticate
+npx supabase functions deploy reset-password
 ```
 
-This creates a secure endpoint for login that doesn't expose the users table.
+This creates secure endpoints for login and admin password resets without exposing the users table.
 
-### Step 2: Test Login Still Works (BEFORE enabling RLS)
+### Step 2: Run Password Hash Migration (HIGH PRIORITY)
+
+Open Supabase SQL Editor and run:
+```
+supabase-password-hash-migration.sql
+```
+
+This converts existing plaintext passwords to bcrypt hashes.
+
+### Step 3: Test Login Still Works (BEFORE enabling RLS)
 
 1. Open your app: http://localhost:5173
 2. Try logging in with: `admin` / `admin`
@@ -35,7 +47,7 @@ This creates a secure endpoint for login that doesn't expose the users table.
 
 **Why test now?** If login fails, we can debug before enabling RLS.
 
-### Step 3: Enable RLS (CRITICAL STEP)
+### Step 4: Enable RLS (CRITICAL STEP)
 
 Open Supabase SQL Editor and run the entire content of:
 ```
@@ -47,7 +59,7 @@ This will:
 - ✅ Protect the `users` table (only Edge Functions can access)
 - ✅ Allow current app functionality (anon key can still access other tables)
 
-### Step 4: Test Everything
+### Step 5: Test Everything
 
 After enabling RLS, test:
 
@@ -58,7 +70,7 @@ After enabling RLS, test:
 - [ ] Can send emails
 - [ ] Bulk email sending works
 
-### Step 5: Verify Security is Fixed
+### Step 6: Verify Security is Fixed
 
 1. Go to Supabase Dashboard → Database → Tables
 2. Try to view `users` table with API - should be BLOCKED ✅
@@ -77,15 +89,25 @@ After enabling RLS, test:
 
 ## 🔐 NEXT STEPS (Recommended but not urgent)
 
-### 1. Hash Passwords (High Priority)
+### 1. Change Passwords Safely (Admin)
 
-Currently passwords are stored in **plain text** - this is dangerous!
+Do not edit plaintext values directly in table rows.
 
-Recommended approach:
-```javascript
-// Use bcrypt or similar
-import bcrypt from 'bcryptjs';
-const hashedPassword = bcrypt.hashSync(password, 10);
+Use the `reset-password` Edge Function (admin JWT required), for example:
+
+```bash
+curl -X POST "https://<PROJECT-REF>.supabase.co/functions/v1/reset-password" \
+	-H "Content-Type: application/json" \
+	-H "Authorization: Bearer <ADMIN_JWT_TOKEN>" \
+	-d '{"username":"Sergiu","newPassword":"NewStrongPass123!"}'
+```
+
+Or from SQL Editor (manual admin operation):
+
+```sql
+update users
+set password = crypt('NewStrongPass123!', gen_salt('bf', 12))
+where username = 'Sergiu';
 ```
 
 ### 2. Migrate to Supabase Auth (Medium Priority)

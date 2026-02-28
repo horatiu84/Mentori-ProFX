@@ -1,7 +1,14 @@
 -- ============================================
--- SECURITY FIX: Enable RLS and Create Policies
+-- SECURITY FIX: Enable RLS and JWT Policies
 -- Run this in Supabase SQL Editor
 -- ============================================
+
+-- JWT NOTE:
+-- Your authenticate edge function must sign tokens with the same JWT secret
+-- used by Supabase and include claims:
+--   role = 'authenticated'
+--   app_role = 'admin' | 'mentor'
+--   mentor_id = '<mentor id>' for mentor users
 
 -- ==================== ENABLE RLS ====================
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -12,118 +19,93 @@ ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clase ENABLE ROW LEVEL SECURITY;
 ALTER TABLE studenti ENABLE ROW LEVEL SECURITY;
 
--- ==================== DROP EXISTING POLICIES (if any) ====================
-DROP POLICY IF EXISTS "Service role can do anything on users" ON users;
-DROP POLICY IF EXISTS "Service role can do anything on mentori" ON mentori;
-DROP POLICY IF EXISTS "Service role can do anything on leaduri" ON leaduri;
-DROP POLICY IF EXISTS "Service role can do anything on alocari" ON alocari;
-DROP POLICY IF EXISTS "Service role can do anything on settings" ON settings;
-DROP POLICY IF EXISTS "Service role can do anything on clase" ON clase;
-DROP POLICY IF EXISTS "Service role can do anything on studenti" ON studenti;
-DROP POLICY IF EXISTS "Anyone can insert settings" ON settings;
+-- ==================== CLEAN OLD POLICIES ====================
+DO $$
+DECLARE p record;
+BEGIN
+  FOR p IN
+    SELECT schemaname, tablename, policyname
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename IN ('users','mentori','leaduri','alocari','settings','clase','studenti')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', p.policyname, p.schemaname, p.tablename);
+  END LOOP;
+END $$;
 
--- ==================== USERS TABLE POLICIES ====================
--- CRITICAL: Block all public access to users table (contains passwords!)
--- Only service role (Edge Functions) can access
-CREATE POLICY "Only service role can access users"
+-- ==================== USERS ====================
+-- Protected: only service_role (edge functions) can access
+CREATE POLICY "users_service_role_only"
   ON users
   FOR ALL
-  USING (auth.role() = 'service_role');
+  TO public
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
 
--- ==================== MENTORI TABLE POLICIES ====================
--- Allow read access for anon (needed for dashboard)
-CREATE POLICY "Anyone can read mentori"
-  ON mentori
-  FOR SELECT
-  USING (true);
-
--- Allow updates for anon (needed for dashboard operations)
-CREATE POLICY "Anyone can update mentori"
-  ON mentori
-  FOR UPDATE
-  USING (true);
-
--- Allow insert for anon (needed for adding mentors)
-CREATE POLICY "Anyone can insert mentori"
-  ON mentori
-  FOR INSERT
-  WITH CHECK (true);
-
--- Allow service role full access
-CREATE POLICY "Service role can do anything on mentori"
+-- ==================== MENTORI ====================
+CREATE POLICY "mentori_public_all"
   ON mentori
   FOR ALL
-  USING (auth.role() = 'service_role');
-
--- ==================== LEADURI TABLE POLICIES ====================
--- Allow full access for anon (needed for lead management)
-CREATE POLICY "Anyone can read leaduri"
-  ON leaduri
-  FOR SELECT
-  USING (true);
-
-CREATE POLICY "Anyone can insert leaduri"
-  ON leaduri
-  FOR INSERT
+  TO public
+  USING (true)
   WITH CHECK (true);
 
-CREATE POLICY "Anyone can update leaduri"
+-- ==================== LEADURI ====================
+-- Public flows (register + confirm link)
+CREATE POLICY "leaduri_anon_select"
+  ON leaduri
+  FOR SELECT
+  TO anon
+  USING (true);
+
+CREATE POLICY "leaduri_anon_insert"
+  ON leaduri
+  FOR INSERT
+  TO anon
+  WITH CHECK (true);
+
+CREATE POLICY "leaduri_anon_update"
   ON leaduri
   FOR UPDATE
-  USING (true);
+  TO anon
+  USING (true)
+  WITH CHECK (true);
 
-CREATE POLICY "Anyone can delete leaduri"
+-- Authenticated dashboard access
+CREATE POLICY "leaduri_authenticated_all"
   ON leaduri
-  FOR DELETE
-  USING (true);
+  FOR ALL
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
 
--- ==================== ALOCARI TABLE POLICIES ====================
-CREATE POLICY "Anyone can access alocari"
+-- ==================== ALOCARI ====================
+CREATE POLICY "alocari_public_all"
   ON alocari
   FOR ALL
-  USING (true);
-
--- ==================== SETTINGS TABLE POLICIES ====================
-CREATE POLICY "Anyone can read settings"
-  ON settings
-  FOR SELECT
-  USING (true);
-
-CREATE POLICY "Anyone can update settings"
-  ON settings
-  FOR UPDATE
-  USING (true);
-
-CREATE POLICY "Anyone can insert settings"
-  ON settings
-  FOR INSERT
+  TO public
+  USING (true)
   WITH CHECK (true);
 
--- ==================== CLASE TABLE POLICIES ====================
-CREATE POLICY "Anyone can access clase"
+-- ==================== SETTINGS ====================
+CREATE POLICY "settings_public_all"
+  ON settings
+  FOR ALL
+  TO public
+  USING (true)
+  WITH CHECK (true);
+
+-- ==================== CLASE / STUDENTI ====================
+CREATE POLICY "clase_public_all"
   ON clase
   FOR ALL
-  USING (true);
+  TO public
+  USING (true)
+  WITH CHECK (true);
 
--- ==================== STUDENTI TABLE POLICIES ====================
-CREATE POLICY "Anyone can access studenti"
+CREATE POLICY "studenti_public_all"
   ON studenti
   FOR ALL
-  USING (true);
-
--- ==================== NOTES ====================
--- After applying these policies:
--- 1. USERS table is PROTECTED - no direct API access (passwords secured!)
--- 2. Other tables allow anon access (needed for current frontend architecture)
--- 3. Your Edge Functions using service_role key will continue to work
--- 4. This fixes the CRITICAL password exposure vulnerability
---
--- NEXT STEPS (Mandatory):
--- 1. Create a login Edge Function to handle authentication
--- 2. Hash all passwords (currently plain text!)
--- 3. Update Login.jsx to use the Edge Function instead of direct DB access
---
--- RECOMMENDED (For better security):
--- - Migrate ALL database operations to Edge Functions
--- - Consider using Supabase Auth instead of custom authentication
--- - Add more granular policies based on authenticated users
+  TO public
+  USING (true)
+  WITH CHECK (true);

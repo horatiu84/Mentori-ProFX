@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
+import { clearStoredAuth, isTokenValid } from '../utils/auth';
 
 export default function ProtectedRoute({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(null);
 
   useEffect(() => {
-    // Verificăm dacă utilizatorul este autentificat
-    const authData = localStorage.getItem('isAuthenticated');
-    setIsAuthenticated(authData === 'true');
+    // Verificăm token-ul JWT
+    const token = localStorage.getItem('authToken');
+    const valid = isTokenValid(token);
+    if (!valid) clearStoredAuth();
+    setIsAuthenticated(valid);
   }, []);
 
   // Loading state

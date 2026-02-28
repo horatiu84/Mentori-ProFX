@@ -107,15 +107,15 @@ CREATE TABLE IF NOT EXISTS studenti (
   "updatedAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==================== DISABLE RLS ====================
--- (Aplicatia foloseste autentificare custom, nu Supabase Auth)
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE mentori DISABLE ROW LEVEL SECURITY;
-ALTER TABLE leaduri DISABLE ROW LEVEL SECURITY;
-ALTER TABLE alocari DISABLE ROW LEVEL SECURITY;
-ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE clase DISABLE ROW LEVEL SECURITY;
-ALTER TABLE studenti DISABLE ROW LEVEL SECURITY;
+-- ==================== ENABLE RLS ====================
+-- Politicile concrete sunt definite în supabase-security-fix.sql
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mentori ENABLE ROW LEVEL SECURITY;
+ALTER TABLE leaduri ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alocari ENABLE ROW LEVEL SECURITY;
+ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clase ENABLE ROW LEVEL SECURITY;
+ALTER TABLE studenti ENABLE ROW LEVEL SECURITY;
 
 -- ==================== INDEXES ====================
 CREATE INDEX IF NOT EXISTS idx_leaduri_status ON leaduri(status);

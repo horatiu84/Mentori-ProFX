@@ -129,3 +129,18 @@ max_frequency = "5s"
 
 [analytics]
 enabled = false
+
+[functions.authenticate]
+verify_jwt = false
+
+[functions.send-bulk-emails]
+verify_jwt = false
+
+[functions.send-vip-emails]
+verify_jwt = false
+
+[functions.reset-password]
+verify_jwt = false
+
+[functions.send-email]
+verify_jwt = false

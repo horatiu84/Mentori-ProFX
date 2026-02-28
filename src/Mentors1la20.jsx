@@ -6,6 +6,7 @@ import { supabase } from "./supabase";
 import { formatDate, MENTORI_DISPONIBILI, MENTOR_PHOTOS, LEAD_STATUS, ONE_TO_TWENTY_STATUS, TIMEOUT_6H, checkLeadTimeout, getTimeUntilTimeout, formatTimeRemaining, getStatusBadge } from "./constants";
 import AdminDashboard from "./components/AdminDashboard";
 import MentorDashboard from "./components/MentorDashboard";
+import { clearStoredAuth, getAuthUserFromToken, isTokenValid } from "./utils/auth";
 // ExcelJS se încarcă lazy doar când e nevoie (import/export)
 
 export default function Mentori1La20() {
@@ -58,7 +59,6 @@ export default function Mentori1La20() {
   const [showManualAllocModal, setShowManualAllocModal] = useState(false);
   const [manualAllocMentor, setManualAllocMentor] = useState('');
   const [manualAllocCount, setManualAllocCount] = useState('');
-  const [mentorCompletionTick, setMentorCompletionTick] = useState(Date.now());
   const isAutoAllocatingRef = useRef(false);
   const lastAutoAllocCheckRef = useRef(0);
 
@@ -80,13 +80,6 @@ export default function Mentori1La20() {
     if (modalConfig.onConfirm) modalConfig.onConfirm();
     closeModal();
   };
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setMentorCompletionTick(Date.now());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   // ==================== FETCH FUNCTIONS ====================
   
@@ -510,13 +503,19 @@ Echipa ProFX`,
 
   // ==================== EFFECTS ====================
   useEffect(() => {
-    const authData = localStorage.getItem('isAuthenticated');
-    if (authData === 'true') {
-      setIsAuthenticated(true);
-      setCurrentMentor(localStorage.getItem('currentUser') || '');
-      setCurrentRole(localStorage.getItem('currentRole') || '');
-      setCurrentMentorId(localStorage.getItem('currentMentorId') || null);
+    const token = localStorage.getItem('authToken');
+    const validToken = isTokenValid(token);
+
+    if (!validToken) {
+      clearStoredAuth();
+      return;
     }
+
+    const tokenUser = getAuthUserFromToken(token);
+    setIsAuthenticated(true);
+    setCurrentMentor(tokenUser?.username || localStorage.getItem('currentUser') || '');
+    setCurrentRole(tokenUser?.role || localStorage.getItem('currentRole') || '');
+    setCurrentMentorId(tokenUser?.mentorId || localStorage.getItem('currentMentorId') || null);
   }, []);
 
   useEffect(() => {
@@ -554,10 +553,7 @@ Echipa ProFX`,
     setCurrentMentor(null); 
     setCurrentRole(null);
     setCurrentMentorId(null);
-    localStorage.removeItem('isAuthenticated');
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('currentRole');
-    localStorage.removeItem('currentMentorId');
+    clearStoredAuth();
     navigate('/login');
   };
 
@@ -982,7 +978,7 @@ Echipa ProFX`,
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
           },
           body: JSON.stringify({
             mentorId: selectedMentorForEmail.id
@@ -1105,7 +1101,7 @@ Echipa ProFX`,
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`
           },
           body: JSON.stringify({})
         }
@@ -1595,7 +1591,7 @@ Echipa ProFX`,
     ? leaduri
         .filter(l => l.mentorAlocat === currentMentorId)
         .filter(l => {
-          const timeLeftMs = getCompletedSession3TimeLeftMs(l, mentorCompletionTick);
+          const timeLeftMs = getCompletedSession3TimeLeftMs(l);
           return timeLeftMs === null || timeLeftMs > 0;
         })
     : [];
