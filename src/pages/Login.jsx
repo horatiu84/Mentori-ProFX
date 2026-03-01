@@ -96,28 +96,31 @@ export default function Login() {
           id: fastUser.id,
         };
 
-        saveLegacySession(userData);
-        attemptCount.current = 0;
+        const supabaseUrlFast = import.meta.env.VITE_SUPABASE_URL;
+        const tokenResponse = await authenticateWithTimeout(
+          supabaseUrlFast,
+          { username: sanitizedUsername, password },
+          AUTH_REQUEST_TIMEOUT_MS
+        );
 
-        // Token hydration in background (needed for protected admin edge functions)
-        void (async () => {
-          try {
-            const supabaseUrlBg = import.meta.env.VITE_SUPABASE_URL;
-            const responseBg = await authenticateWithTimeout(
-              supabaseUrlBg,
-              { username: sanitizedUsername, password },
-              AUTH_REQUEST_TIMEOUT_MS
-            );
+        let tokenResult = {};
+        try {
+          tokenResult = await tokenResponse.json();
+        } catch {
+          tokenResult = { error: 'Răspuns invalid de la server' };
+        }
 
-            if (!responseBg.ok) return;
-            const resultBg = await responseBg.json();
-            if (resultBg?.accessToken) {
-              saveAuthSession(resultBg.accessToken, userData);
-            }
-          } catch {
-            // silent: fast login already succeeded
+        if (!tokenResponse.ok || !tokenResult?.accessToken) {
+          if (userData.role === 'admin') {
+            setError('Autentificarea admin necesită token valid. Te rugăm încearcă din nou.');
+            return;
           }
-        })();
+          saveLegacySession(userData);
+        } else {
+          saveAuthSession(tokenResult.accessToken, userData);
+        }
+
+        attemptCount.current = 0;
 
         setLoading(false);
         navigate('/admin');

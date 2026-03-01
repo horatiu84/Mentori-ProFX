@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Input } from "./ui/input";
 import { Card, CardContent } from "./ui/card";
 import { formatDate, getStatusBadge, formatTimeRemaining, getTimeUntilTimeout, LEAD_STATUS, MENTORI_DISPONIBILI, MENTOR_PHOTOS } from "../constants";
@@ -55,6 +55,7 @@ export default function AdminDashboard({
   const [absCurrentPage, setAbsCurrentPage] = useState(1);
   const [absSortBy, setAbsSortBy] = useState('data-desc');
   const [accountForms, setAccountForms] = useState({});
+  const [hasTriedAccountsLoad, setHasTriedAccountsLoad] = useState(false);
   const absLeaduriPerPage = 10;
   const absolventiAll = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI);
   const absolventiFiltrati = absolventiAll.filter(l =>
@@ -140,6 +141,16 @@ export default function AdminDashboard({
       }
     }));
   };
+
+  useEffect(() => {
+    if (activeMainTab !== 'conturi' || hasTriedAccountsLoad || loadingUsersAccounts) return;
+    if (Array.isArray(usersAccounts) && usersAccounts.length > 0) {
+      setHasTriedAccountsLoad(true);
+      return;
+    }
+    setHasTriedAccountsLoad(true);
+    fetchUsersAccounts();
+  }, [activeMainTab, hasTriedAccountsLoad, loadingUsersAccounts, fetchUsersAccounts, usersAccounts]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900">

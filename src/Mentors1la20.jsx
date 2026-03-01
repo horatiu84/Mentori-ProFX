@@ -65,6 +65,52 @@ export default function Mentori1La20() {
   const lastAutoAllocCheckRef = useRef(0);
 
   const COMPLETED_3_SESSIONS_HIDE_MS = 60 * 60 * 1000;
+  const ACCOUNTS_REQUEST_TIMEOUT_MS = 12000;
+  const ACCOUNTS_REQUEST_MAX_RETRIES = 1;
+  const ACCOUNTS_CACHE_KEY = 'adminUsersAccountsCacheV1';
+  const ACCOUNTS_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  const parseJsonResponse = async (response) => {
+    const raw = await response.text();
+    if (!raw) return {};
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return { error: raw };
+    }
+  };
+
+  const fetchWithTimeout = async (url, options = {}, timeoutMs = 10000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  const readCachedUsersAccounts = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(ACCOUNTS_CACHE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      const ts = Number(parsed?.ts || 0);
+      const users = Array.isArray(parsed?.users) ? parsed.users : [];
+      if (!ts || Date.now() - ts > ACCOUNTS_CACHE_TTL_MS) return [];
+      return users;
+    } catch {
+      return [];
+    }
+  }, [ACCOUNTS_CACHE_KEY, ACCOUNTS_CACHE_TTL_MS]);
+
+  const writeCachedUsersAccounts = useCallback((users) => {
+    try {
+      localStorage.setItem(ACCOUNTS_CACHE_KEY, JSON.stringify({ ts: Date.now(), users }));
+    } catch {
+      // ignore storage quota/availability issues
+    }
+  }, [ACCOUNTS_CACHE_KEY]);
 
   // ==================== MODAL HELPERS ====================
   const showAlert = (title, message) => {
@@ -327,40 +373,82 @@ Echipa ProFX`,
     await Promise.all([fetchMentori(), fetchLeaduri(), fetchAlocari(), fetchEmailTemplate(), fetchVipEmailTemplate()]);
     setLoadingData(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [readCachedUsersAccounts, writeCachedUsersAccounts]);
 
-  const fetchUsersAccounts = useCallback(async () => {
+  const fetchUsersAccounts = useCallback(async (options = {}) => {
+    const { preferCache = false, background = false, silentNoToken = false } = options;
     const token = localStorage.getItem('authToken');
-    if (!token) {
+    if (!token || !isTokenValid(token)) {
       setUsersAccounts([]);
+      if (!silentNoToken) {
+        setError('Sesiune expirată. Reautentifică-te pentru a încărca conturile.');
+      }
       return;
     }
 
-    setLoadingUsersAccounts(true);
+    let servedFromCache = false;
+    if (preferCache) {
+      const cachedUsers = readCachedUsersAccounts();
+      if (cachedUsers.length > 0) {
+        setUsersAccounts(cachedUsers);
+        servedFromCache = true;
+      }
+    }
+
+    if (!background) {
+      setLoadingUsersAccounts(true);
+    }
+    setError('');
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/functions/v1/manage-users`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const endpoint = `${supabaseUrl}/functions/v1/manage-users`;
+      let lastError = null;
 
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Nu s-au putut încărca conturile');
-      setUsersAccounts(Array.isArray(result.users) ? result.users : []);
+      for (let attempt = 0; attempt <= ACCOUNTS_REQUEST_MAX_RETRIES; attempt += 1) {
+        try {
+          const response = await fetchWithTimeout(endpoint, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          }, ACCOUNTS_REQUEST_TIMEOUT_MS);
+
+          const result = await parseJsonResponse(response);
+          if (!response.ok) throw new Error(result.error || 'Nu s-au putut încărca conturile');
+
+          const users = Array.isArray(result.users) ? result.users : [];
+          setUsersAccounts(users);
+          writeCachedUsersAccounts(users);
+          return;
+        } catch (err) {
+          const message = err?.name === 'AbortError'
+            ? 'Cererea de încărcare a conturilor a depășit timpul limită.'
+            : (err?.message || 'Eroare necunoscută la încărcare');
+          lastError = new Error(message);
+
+          if (attempt < ACCOUNTS_REQUEST_MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+      }
+
+      throw lastError || new Error('Nu s-au putut încărca conturile');
     } catch (err) {
       console.error('Eroare la încărcarea conturilor:', err);
-      setError('Eroare la încărcarea conturilor utilizatorilor');
+      if (!servedFromCache) {
+        setError(err?.message || 'Eroare la încărcarea conturilor utilizatorilor');
+      }
     } finally {
-      setLoadingUsersAccounts(false);
+      if (!background) {
+        setLoadingUsersAccounts(false);
+      }
     }
-  }, []);
+  }, [readCachedUsersAccounts, writeCachedUsersAccounts]);
 
   const updateUserCredentials = async ({ targetUsername, oldPassword, newPassword, newUsername }) => {
     const token = localStorage.getItem('authToken');
-    if (!token) {
+    if (!token || !isTokenValid(token)) {
       setError('Sesiune invalidă. Reautentifică-te.');
       return false;
     }
@@ -370,16 +458,16 @@ Echipa ProFX`,
     setSuccess('');
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const response = await fetch(`${supabaseUrl}/functions/v1/manage-users`, {
+      const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/manage-users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ targetUsername, oldPassword, newPassword, newUsername }),
-      });
+      }, ACCOUNTS_REQUEST_TIMEOUT_MS);
 
-      const result = await response.json();
+      const result = await parseJsonResponse(response);
       if (!response.ok) throw new Error(result.error || 'Actualizarea contului a eșuat');
 
       await fetchUsersAccounts();
@@ -586,6 +674,11 @@ Echipa ProFX`,
     const legacyRole = localStorage.getItem('currentRole') || '';
 
     if (legacyAuth && legacyUser && legacyRole) {
+      if (legacyRole === 'admin') {
+        clearStoredAuth();
+        navigate('/login');
+        return;
+      }
       setIsAuthenticated(true);
       setCurrentMentor(legacyUser);
       setCurrentRole(legacyRole);
@@ -594,7 +687,7 @@ Echipa ProFX`,
     }
 
     clearStoredAuth();
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     if (isAuthenticated) { fetchAllData(); }
@@ -602,7 +695,7 @@ Echipa ProFX`,
 
   useEffect(() => {
     if (isAuthenticated && currentRole === 'admin') {
-      fetchUsersAccounts();
+      fetchUsersAccounts({ preferCache: true, background: true, silentNoToken: true });
     }
   }, [isAuthenticated, currentRole, fetchUsersAccounts]);
 
@@ -638,6 +731,7 @@ Echipa ProFX`,
     setCurrentRole(null);
     setCurrentMentorId(null);
     setUsersAccounts([]);
+    localStorage.removeItem(ACCOUNTS_CACHE_KEY);
     clearStoredAuth();
     navigate('/login');
   };
