@@ -485,6 +485,16 @@ Echipa ProFX`,
   const checkAndAutoAllocate = useCallback(async () => {
     let modificari = false;
     
+    // Verifică dacă un mentor are program activ (leaduri confirmate/neconfirmate/in_program sau emailuri trimise)
+    const mentorAreProgramActiv = (mentorId) => {
+      return leaduri.some(l =>
+        l.mentorAlocat === mentorId && (
+          [LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM].includes(l.status) ||
+          (l.status === LEAD_STATUS.ALOCAT && l.emailTrimis === true)
+        )
+      );
+    };
+    
     try {
       // PRIORITATE 1: Realocă IMEDIAT leadurile neconfirmate
       const leaduriNeconfirmate = leaduri.filter(l => l.status === LEAD_STATUS.NECONFIRMAT);
@@ -493,13 +503,19 @@ Echipa ProFX`,
         console.log(`🔄 Găsite ${leaduriNeconfirmate.length} leaduri neconfirmate - se realocă automat...`);
         modificari = true;
         
+        // Track local lead counts per mentor to enforce 30-lead cap within the loop
+        const localLeadCounts = {};
+        mentoriData.forEach(m => { localLeadCounts[m.id] = m.leaduriAlocate || 0; });
+        
         for (const lead of leaduriNeconfirmate) {
           const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
           const mentorActual = lead.mentorAlocat;
           
           const mentorNou = mentoriSortati.find(m => {
-            const leadCnt = m.leaduriAlocate || 0;
-            return m.id !== mentorActual && leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30)) && !m.manuallyDisabled;
+            const leadCnt = localLeadCounts[m.id] || 0;
+            // Sare mentorii care sunt în program activ (au webinar programat/confirmat)
+            if (mentorAreProgramActiv(m.id)) return false;
+            return m.id !== mentorActual && leadCnt < 30 && m.available && !m.manuallyDisabled;
           });
           
           if (!mentorNou) {
@@ -524,6 +540,11 @@ Echipa ProFX`,
                 }).eq("id", lead.alocareId);
               }
             }
+          }
+          
+          // Decrementează contorul mentorului vechi
+          if (mentorActual && localLeadCounts[mentorActual] !== undefined) {
+            localLeadCounts[mentorActual] = Math.max(0, (localLeadCounts[mentorActual] || 0) - 1);
           }
           
           const alocareExistenta = alocariActive.find(a => a.mentorId === mentorNou.id && a.status === 'activa');
@@ -562,11 +583,25 @@ Echipa ProFX`,
             motivNeconfirmare: null
           }).eq("id", lead.id);
           
+          // Incrementează contorul local al mentorului nou
+          localLeadCounts[mentorNou.id] = (localLeadCounts[mentorNou.id] || 0) + 1;
+          
           await supabase.from("mentori").update({
-            leaduriAlocate: (mentorNou.leaduriAlocate || 0) + 1
+            leaduriAlocate: localLeadCounts[mentorNou.id]
           }).eq("id", mentorNou.id);
           
-          console.log(`✅ Re-alocare automată: Lead "${lead.nume}" de la ${mentorActual} -> ${mentorNume}`);
+          console.log(`✅ Re-alocare automată: Lead "${lead.nume}" de la ${mentorActual} -> ${mentorNume} (${localLeadCounts[mentorNou.id]}/30)`);
+        }
+        
+        // Actualizează și contoarele mentorilor vechi în DB
+        for (const m of mentoriData) {
+          const dbCount = m.leaduriAlocate || 0;
+          const localCount = localLeadCounts[m.id] || 0;
+          if (localCount !== dbCount) {
+            await supabase.from("mentori").update({
+              leaduriAlocate: localCount
+            }).eq("id", m.id);
+          }
         }
       }
       
@@ -577,7 +612,9 @@ Echipa ProFX`,
         const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
         const mentorEligibil = mentoriSortati.find(m => {
           const leadCnt = m.leaduriAlocate || 0;
-          return leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30)) && !m.manuallyDisabled;
+          // Sare mentorii care sunt în program activ
+          if (mentorAreProgramActiv(m.id)) return false;
+          return leadCnt < 30 && m.available && !m.manuallyDisabled;
         });
         
         if (mentorEligibil) {
@@ -1017,18 +1054,26 @@ Echipa ProFX`,
     finally { setLoading(false); }
   };
 
-  const toggleMentorAvailability = async (mentorId, currentStatus) => {
+  const toggleMentorAvailability = async (mentorId, isCurrentlyDisabled) => {
     setLoading(true);
     try {
-      console.log(`Toggling mentor ${mentorId} from ${currentStatus} to ${!currentStatus}`);
-      const newStatus = !currentStatus;
-      await supabase.from("mentori").update({ 
-        available: newStatus,
-        manuallyDisabled: newStatus ? false : true
-      }).eq("id", mentorId);
+      if (isCurrentlyDisabled) {
+        // Activează: doar scoatem manuallyDisabled, fetchMentori recalculează available corect
+        console.log(`Activare mentor ${mentorId}`);
+        await supabase.from("mentori").update({ 
+          manuallyDisabled: false
+        }).eq("id", mentorId);
+      } else {
+        // Dezactivează manual: forțat available=false + manuallyDisabled=true
+        console.log(`Dezactivare manuală mentor ${mentorId}`);
+        await supabase.from("mentori").update({ 
+          available: false,
+          manuallyDisabled: true
+        }).eq("id", mentorId);
+      }
+      // fetchMentori recalculează available bazat pe starea reală (manuallyDisabled, leaduri active, etc.)
       await fetchMentori(); 
-      setSuccess(`Status mentor actualizat! Mentor ${currentStatus ? 'dezactivat' : 'activat'}.`);
-      console.log('Mentor availability updated successfully');
+      setSuccess(isCurrentlyDisabled ? 'Mentor activat!' : 'Mentor dezactivat!');
     } catch (err) { 
       console.error("Eroare la actualizarea statusului:", err);
       setError(`Eroare la actualizarea statusului: ${err.message}`); 
@@ -1864,6 +1909,7 @@ Echipa ProFX`,
     return {
       id: mentorDef.id, nume: mentorDef.nume,
       available: mentorDB?.available ?? true,
+      manuallyDisabled: mentorDB?.manuallyDisabled ?? false,
       ultimulOneToTwenty: mentorDB?.ultimulOneToTwenty ?? null,
       webinar2Date: mentorDB?.webinar2Date ?? null,
       webinar3Date: mentorDB?.webinar3Date ?? null,

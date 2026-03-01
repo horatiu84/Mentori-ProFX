@@ -375,8 +375,39 @@ export default function AdminDashboard({
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
               {mentoriUnici
                 .sort((a, b) => a.ordineCoada - b.ordineCoada)
-                .map((mentor, index) => (
-                  <div key={mentor.id} className={"border-2 rounded-xl p-4 transition-all " + (mentor.available ? 'border-green-500/50 bg-gray-800/30' : 'border-gray-600/50 bg-gray-800/30')}>
+                .map((mentor, index) => {
+                  // Calculăm starea reală din leaduri, NU din flag-ul available
+                  const hasActiveProgram = leaduri.some(l =>
+                    l.mentorAlocat === mentor.id && (
+                      [LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM].includes(l.status) ||
+                      (l.status === LEAD_STATUS.ALOCAT && l.emailTrimis === true)
+                    )
+                  );
+                  const isFull = (mentor.leaduriAlocate || 0) >= 30;
+                  const isDisabled = mentor.manuallyDisabled === true;
+                  
+                  // Prioritate badge: Dezactivat > Complet > În Program > Disponibil
+                  let badgeLabel, badgeClass, borderClass;
+                  if (isDisabled) {
+                    badgeLabel = '🔴 Dezactivat';
+                    badgeClass = 'bg-red-500/20 border-red-500/50 text-red-300';
+                    borderClass = 'border-red-500/30 bg-gray-800/30';
+                  } else if (isFull) {
+                    badgeLabel = '🔶 Complet (30/30)';
+                    badgeClass = 'bg-orange-500/20 border-orange-500/50 text-orange-300';
+                    borderClass = 'border-orange-500/30 bg-gray-800/30';
+                  } else if (hasActiveProgram) {
+                    badgeLabel = '🔵 În Program';
+                    badgeClass = 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300';
+                    borderClass = 'border-cyan-500/30 bg-gray-800/30';
+                  } else {
+                    badgeLabel = '✅ Disponibil';
+                    badgeClass = 'bg-green-500/20 border-green-500/50 text-green-300';
+                    borderClass = 'border-green-500/50 bg-gray-800/30';
+                  }
+                  
+                  return (
+                  <div key={mentor.id} className={"border-2 rounded-xl p-4 transition-all " + borderClass}>
                     <div className="text-center">
                       <div className="mb-3 flex justify-center">
                         <div className="w-16 h-16 rounded-full border-2 border-gray-600/50 overflow-hidden">
@@ -407,13 +438,7 @@ export default function AdminDashboard({
                         <div className="flex justify-between"><span className="text-purple-400">Prezenți:</span><span className="text-purple-400 font-bold">{leaduri.filter(l => l.mentorAlocat === mentor.id && l.status === LEAD_STATUS.COMPLET).length}</span></div>
                       </div>
                       <div className="mt-2">
-                        {mentor.available ? (
-                          <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold border bg-green-500/20 border-green-500/50 text-green-300">✅ Disponibil</span>
-                        ) : (
-                          <span className={"inline-block px-3 py-1 rounded-full text-xs font-semibold border " + (mentor.manuallyDisabled ? 'bg-red-500/20 border-red-500/50 text-red-300' : (mentor.leaduriAlocate || 0) >= 30 ? 'bg-orange-500/20 border-orange-500/50 text-orange-300' : 'bg-cyan-500/20 border-cyan-500/50 text-cyan-300')}>
-                            {mentor.manuallyDisabled ? '🔴 Dezactivat manual' : (mentor.leaduriAlocate || 0) >= 30 ? '🔶 Complet (30/30)' : '🔵 În Program'}
-                          </span>
-                        )}
+                        <span className={"inline-block px-3 py-1 rounded-full text-xs font-semibold border " + badgeClass}>{badgeLabel}</span>
                       </div>
                       <div className="mt-2">
                         {mentor.ultimulOneToTwenty ? (
@@ -437,12 +462,11 @@ export default function AdminDashboard({
                         <button 
                           onClick={(e) => {
                             e.preventDefault();
-                            console.log('Dezactiveaza button clicked for mentor:', mentor.id);
-                            toggleMentorAvailability(mentor.id, mentor.available);
+                            toggleMentorAvailability(mentor.id, isDisabled);
                           }}
                           disabled={loading}
-                          className={"w-full px-3 py-1.5 rounded-lg text-sm font-semibold transition-all border " + (loading ? 'opacity-50 cursor-not-allowed ' : '') + (mentor.available ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300' : 'bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-300')}>
-                          {loading ? '...' : (mentor.available ? 'Dezactiveaza' : 'Activeaza')}
+                          className={"w-full px-3 py-1.5 rounded-lg text-sm font-semibold transition-all border " + (loading ? 'opacity-50 cursor-not-allowed ' : '') + (!isDisabled ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300' : 'bg-green-500/20 hover:bg-green-500/30 border-green-500/50 text-green-300')}>
+                          {loading ? '...' : (isDisabled ? 'Activeaza' : 'Dezactiveaza')}
                         </button>
                         <button onClick={() => openDateModal(mentor.id)}
                           className="w-full bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all">
@@ -451,7 +475,8 @@ export default function AdminDashboard({
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
             </div>
           </CardContent>
         </Card>
