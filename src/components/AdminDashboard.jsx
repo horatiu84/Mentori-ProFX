@@ -46,7 +46,7 @@ export default function AdminDashboard({
   openVipEmailTemplateEditor, saveVipEmailTemplate,
   vipEmailPreview, setVipEmailPreview,
   showVipEmailPreviewFn, sendVipEmails,
-  usersAccounts, loadingUsersAccounts, fetchUsersAccounts, updateUserCredentials,
+  usersAccounts, loadingUsersAccounts, fetchUsersAccounts, updateUserCredentials, resetUserPasswordByAdmin,
   showModal, modalConfig, closeModal, handleModalConfirm,
 }) {
   const [activeMainTab, setActiveMainTab] = useState('leaduri');
@@ -142,6 +142,35 @@ export default function AdminDashboard({
     }));
   };
 
+  const submitAdminPasswordReset = async (account) => {
+    const form = getAccountForm(account);
+    if (!form.newPassword) {
+      setError('Pentru resetare trebuie introdusă parola nouă.');
+      return;
+    }
+
+    if ((form.newPassword || '').length < 8) {
+      setError('Parola nouă trebuie să aibă minim 8 caractere.');
+      return;
+    }
+
+    const ok = await resetUserPasswordByAdmin({
+      username: account.username,
+      newPassword: form.newPassword,
+    });
+
+    if (!ok) return;
+
+    setAccountForms(prev => ({
+      ...prev,
+      [account.id]: {
+        ...form,
+        newPassword: '',
+        oldPassword: '',
+      }
+    }));
+  };
+
   useEffect(() => {
     if (activeMainTab !== 'conturi' || hasTriedAccountsLoad || loadingUsersAccounts) return;
     if (Array.isArray(usersAccounts) && usersAccounts.length > 0) {
@@ -221,7 +250,7 @@ export default function AdminDashboard({
             <div className="flex items-center justify-between gap-3 mb-4">
               <div>
                 <h2 className="text-xl font-bold text-fuchsia-300">Administrare Conturi Utilizatori</h2>
-                <p className="text-sm text-gray-400">Actualizezi username-ul și parola pentru admin + mentori (parola veche este obligatorie).</p>
+                <p className="text-sm text-gray-400">Actualizezi username/parolă cu parola veche sau faci reset de parolă direct ca admin.</p>
               </div>
               <button
                 onClick={fetchUsersAccounts}
@@ -230,6 +259,16 @@ export default function AdminDashboard({
               >
                 {loadingUsersAccounts ? 'Se încarcă...' : 'Refresh Conturi'}
               </button>
+            </div>
+
+            {/* NOTĂ INSTRUCȚIUNI */}
+            <div className="mb-6 p-4 rounded-xl border border-fuchsia-500/30 bg-fuchsia-900/10 text-fuchsia-200 text-sm">
+              <b>Instrucțiuni gestionare conturi:</b>
+              <ul className="list-disc pl-5 mt-2 space-y-1">
+                <li><b>Actualizare cont:</b> Pentru a schimba username sau parola, completează <b>parola veche</b> și <b>parola nouă</b> (minim 8 caractere). Apasă pe <b>Actualizează contul</b>.</li>
+                <li><b>Resetare parolă (admin):</b> Pentru a reseta parola unui utilizator fără parola veche, introdu doar <b>parola nouă</b> (minim 8 caractere) și apasă pe <b>Reset parolă</b>. Această acțiune este disponibilă doar pentru administratori.</li>
+                <li>După resetare sau actualizare, utilizatorul va trebui să folosească noua parolă la autentificare.</li>
+              </ul>
             </div>
 
             {!usersAccounts || usersAccounts.length === 0 ? (
@@ -288,7 +327,14 @@ export default function AdminDashboard({
                           />
                         </div>
 
-                        <div className="mt-3 flex justify-end">
+                        <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                          <button
+                            onClick={() => submitAdminPasswordReset(account)}
+                            disabled={loading}
+                            className={"px-4 py-2 rounded-xl text-sm font-semibold border transition-all " + (loading ? 'bg-gray-700/20 border-gray-600/50 text-gray-500 cursor-not-allowed' : 'bg-amber-500/20 hover:bg-amber-500/30 border-amber-500/50 text-amber-300')}
+                          >
+                            ♻️ Reset parolă
+                          </button>
                           <button
                             onClick={() => submitAccountUpdate(account)}
                             disabled={loading}

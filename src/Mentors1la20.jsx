@@ -481,6 +481,40 @@ Echipa ProFX`,
     }
   };
 
+  const resetUserPasswordByAdmin = async ({ username, newPassword }) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !isTokenValid(token)) {
+      setError('Sesiune invalidă. Reautentifică-te.');
+      return false;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ username, newPassword }),
+      }, ACCOUNTS_REQUEST_TIMEOUT_MS);
+
+      const result = await parseJsonResponse(response);
+      if (!response.ok) throw new Error(result.error || 'Resetarea parolei a eșuat');
+
+      setSuccess(`Parola pentru "${username}" a fost resetată cu succes!`);
+      return true;
+    } catch (err) {
+      setError('Eroare la resetarea parolei: ' + (err.message || ''));
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ==================== AUTO-ALLOCATE ====================
   const checkAndAutoAllocate = useCallback(async () => {
     let modificari = false;
@@ -624,14 +658,12 @@ Echipa ProFX`,
           const leadCntActual = mentorEligibil.leaduriAlocate || 0;
           const spatDisponibil = 30 - leadCntActual;
           
-          let nrDeAlocat;
-          if (leadCntActual === 0) {
-            nrDeAlocat = Math.min(30, leaduriNealocateList.length);
-          } else if (leadCntActual >= 20 && leadCntActual < 30) {
-            nrDeAlocat = Math.min(spatDisponibil, leaduriNealocateList.length);
-          } else {
-            return modificari;
+          // Orice mentor cu loc disponibil primeste leaduri pana la 30
+          // Exceptie: mentor cu 0 leaduri necesita minim 20 disponibile
+          if (leadCntActual === 0 && leaduriNealocateList.length < 20) {
+            return modificari; // Nu destule leaduri pentru a initializa un mentor nou
           }
+          const nrDeAlocat = Math.min(spatDisponibil, leaduriNealocateList.length);
           
           const batch = leaduriNealocateList.slice(0, nrDeAlocat);
           const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === mentorEligibil.id);
@@ -740,7 +772,7 @@ Echipa ProFX`,
     const now = Date.now();
     const timeSinceLastCheck = now - lastAutoAllocCheckRef.current;
     
-    if (isAuthenticated && leaduri.length > 0 && mentoriData.length > 0 && !loadingData && !isAutoAllocatingRef.current && timeSinceLastCheck > 3000) {
+    if (isAuthenticated && leaduri.length > 0 && mentoriData.length > 0 && !loadingData && !isAutoAllocatingRef.current && timeSinceLastCheck > 10000) {
       const verificaAutoAlocare = async () => {
         isAutoAllocatingRef.current = true;
         lastAutoAllocCheckRef.current = Date.now();
@@ -862,17 +894,18 @@ Echipa ProFX`,
       
       const mentorEligibil = mentoriSortati.find(m => {
         const leadCnt = m.leaduriAlocate || 0;
-        return leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30)) && !m.manuallyDisabled;
+        return leadCnt < 30 && m.available && !m.manuallyDisabled;
       });
       
       if (!mentorEligibil) { 
-        setError("Nu exista mentori disponibili. Trebuie ca mentorul sa fie activat sau sa aiba intre 20-29 leaduri."); 
+        setError("Nu exista mentori disponibili. Activeaza un mentor pentru a putea aloca leaduri."); 
         setLoading(false); 
         return; 
       }
       
       const leadCntActual = mentorEligibil.leaduriAlocate || 0;
       
+      // Mentor cu 0 leaduri necesita minim 20 disponibile pentru a-l initializa
       if (leadCntActual === 0 && nealoc.length < 20) {
         setError('Pentru un mentor nou, minimul este 20 leaduri. Disponibile: ' + nealoc.length);
         setLoading(false);
@@ -880,17 +913,8 @@ Echipa ProFX`,
       }
       
       const spatDisponibil = 30 - leadCntActual;
-      let nrDeAlocat;
-      
-      if (leadCntActual === 0) {
-        nrDeAlocat = Math.min(30, nealoc.length);
-      } else if (leadCntActual >= 20 && leadCntActual < 30) {
-        nrDeAlocat = Math.min(spatDisponibil, nealoc.length);
-      } else {
-        setError('Mentorul selectat nu poate primi mai multe leaduri');
-        setLoading(false);
-        return;
-      }
+      // Orice mentor cu loc disponibil primeste leaduri pana la 30
+      const nrDeAlocat = Math.min(spatDisponibil, nealoc.length);
       
       const batch = nealoc.slice(0, nrDeAlocat);
       const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === mentorEligibil.id);
@@ -1063,17 +1087,46 @@ Echipa ProFX`,
         await supabase.from("mentori").update({ 
           manuallyDisabled: false
         }).eq("id", mentorId);
+        await fetchMentori();
+        setSuccess('Mentor activat!');
       } else {
-        // Dezactivează manual: forțat available=false + manuallyDisabled=true
+        // Dezactivează manual și dezalocă leadurile active/non-finalizate ca să nu rămână blocate
         console.log(`Dezactivare manuală mentor ${mentorId}`);
+
+        const leaduriDeDezalocat = leaduri.filter(l =>
+          l.mentorAlocat === mentorId && !isFinalizedProgramLead(l)
+        );
+
+        if (leaduriDeDezalocat.length > 0) {
+          const leadIds = leaduriDeDezalocat.map(l => l.id);
+          const BATCH_SIZE = 200;
+
+          for (let i = 0; i < leadIds.length; i += BATCH_SIZE) {
+            const batchIds = leadIds.slice(i, i + BATCH_SIZE);
+            await supabase.from("leaduri").update({
+              status: LEAD_STATUS.NEALOCAT,
+              mentorAlocat: null,
+              dataAlocare: null,
+              dataTimeout: null,
+              dataConfirmare: null,
+              emailTrimis: false,
+              alocareId: null
+            }).in("id", batchIds);
+          }
+
+          await supabase.from("alocari").delete().eq("mentorId", mentorId);
+        }
+
         await supabase.from("mentori").update({ 
           available: false,
+          leaduriAlocate: 0,
           manuallyDisabled: true
         }).eq("id", mentorId);
+
+        await fetchAllData();
+        setSuccess(`Mentor dezactivat și ${leaduriDeDezalocat.length} leaduri dezalocate!`);
+        return;
       }
-      // fetchMentori recalculează available bazat pe starea reală (manuallyDisabled, leaduri active, etc.)
-      await fetchMentori(); 
-      setSuccess(isCurrentlyDisabled ? 'Mentor activat!' : 'Mentor dezactivat!');
     } catch (err) { 
       console.error("Eroare la actualizarea statusului:", err);
       setError(`Eroare la actualizarea statusului: ${err.message}`); 
@@ -1995,6 +2048,7 @@ Echipa ProFX`,
         loadingUsersAccounts={loadingUsersAccounts}
         fetchUsersAccounts={fetchUsersAccounts}
         updateUserCredentials={updateUserCredentials}
+        resetUserPasswordByAdmin={resetUserPasswordByAdmin}
         showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
       />
     );
