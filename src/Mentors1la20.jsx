@@ -34,7 +34,7 @@ export default function Mentori1La20() {
   const leaduriPerPage = 10;
   const [selectedMentor, setSelectedMentor] = useState(null);
   const [editingLead, setEditingLead] = useState(null);
-  const [editLeadData, setEditLeadData] = useState({ nume: '', telefon: '', email: '' });
+  const [editLeadData, setEditLeadData] = useState({ nume: '', telefon: '', email: '', status: '' });
   const [showDateModal, setShowDateModal] = useState(false);
   const [selectedMentorForDate, setSelectedMentorForDate] = useState(null);
   const [manualDate, setManualDate] = useState('');
@@ -1820,19 +1820,21 @@ Echipa ProFX`,
 
   const handleEditLead = (lead) => {
     setEditingLead(lead.id);
-    setEditLeadData({ nume: lead.nume, telefon: lead.telefon, email: lead.email });
+    setEditLeadData({ nume: lead.nume, telefon: lead.telefon, email: lead.email, status: lead.status || '' });
   };
 
   const handleSaveEditLead = async (leadId) => {
     if (!editLeadData.nume || !editLeadData.telefon || !editLeadData.email) { setError("Toate campurile sunt obligatorii"); return; }
     setLoading(true); setError(""); setSuccess("");
     try {
-      await supabase.from("leaduri").update({ nume: editLeadData.nume.trim(), telefon: editLeadData.telefon.trim(), email: editLeadData.email.trim() }).eq("id", leadId);
+      const updatePayload = { nume: editLeadData.nume.trim(), telefon: editLeadData.telefon.trim(), email: editLeadData.email.trim() };
+      if (editLeadData.status) updatePayload.status = editLeadData.status;
+      await supabase.from("leaduri").update(updatePayload).eq("id", leadId);
       setSuccess("Lead actualizat cu succes!"); setEditingLead(null); await fetchLeaduri();
     } catch (err) { setError("Eroare la actualizarea leadului"); } finally { setLoading(false); }
   };
 
-  const handleCancelEdit = () => { setEditingLead(null); setEditLeadData({ nume: '', telefon: '', email: '' }); };
+  const handleCancelEdit = () => { setEditingLead(null); setEditLeadData({ nume: '', telefon: '', email: '', status: '' }); };
 
   const handleDeleteLead = (lead) => {
     showConfirmDialog("Stergere Lead", 'Stergi leadul "' + lead.nume + '"?', async () => {

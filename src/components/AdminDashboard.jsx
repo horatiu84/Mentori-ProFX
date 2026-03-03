@@ -360,7 +360,7 @@ export default function AdminDashboard({
             <h2 className="text-xl font-bold text-yellow-400 mb-4">Statistici Generale</h2>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/30 p-4 rounded-xl text-center">
-                <p className="text-sm text-gray-300 mb-1">Total</p>
+                <p className="text-sm text-gray-300 mb-1">Total Leaduri</p>
                 <p className="text-3xl font-bold text-blue-400">{leaduri.length}</p>
               </div>
               <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border border-yellow-500/30 p-4 rounded-xl text-center">
@@ -371,30 +371,17 @@ export default function AdminDashboard({
                 <p className="text-sm text-blue-300 mb-1">Alocate</p>
                 <p className="text-3xl font-bold text-blue-400">{leaduriAlocate}</p>
               </div>
-              <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/30 p-4 rounded-xl text-center">
-                <p className="text-sm text-green-300 mb-1">Confirmate</p>
-                <p className="text-3xl font-bold text-green-400">{leaduriConfirmate}</p>
-              </div>
-              <div className="bg-gradient-to-br from-red-500/10 to-red-600/5 border border-red-500/30 p-4 rounded-xl text-center">
-                <p className="text-sm text-red-300 mb-1">Neconfirmate</p>
-                <p className="text-3xl font-bold text-red-400">{leaduriNeconfirmate}</p>
+              <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border border-orange-500/30 p-4 rounded-xl text-center">
+                <p className="text-sm text-orange-300 mb-1">No-Show</p>
+                <p className="text-3xl font-bold text-orange-400">{leaduriNoShow}</p>
               </div>
               <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/30 p-4 rounded-xl text-center">
-                <p className="text-sm text-purple-300 mb-1">Prezenți</p>
-                <p className="text-3xl font-bold text-purple-400">{leaduriComplete}</p>
+                <p className="text-sm text-purple-300 mb-1">Absolventi</p>
+                <p className="text-3xl font-bold text-purple-400">{absolventiAll.length}</p>
               </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div className="bg-gradient-to-br from-orange-500/10 to-orange-600/5 border border-orange-500/30 p-4 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div><p className="text-sm text-orange-300 mb-1">No-Show</p><p className="text-2xl font-bold text-orange-400">{leaduriNoShow}</p></div>
-                </div>
-              </div>
-              <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/30 p-4 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div><p className="text-sm text-gray-300 mb-1">Rata conversie</p>
-                  <p className="text-2xl font-bold text-blue-400">{leaduri.length > 0 ? Math.round((leaduriComplete / leaduri.length) * 100) : 0}%</p></div>
-                </div>
+              <div className="bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/30 p-4 rounded-xl text-center">
+                <p className="text-sm text-green-300 mb-1">Rata conversie</p>
+                <p className="text-3xl font-bold text-green-400">{leaduri.length > 0 ? Math.round((absolventiAll.length / leaduri.length) * 100) : 0}%</p>
               </div>
             </div>
           </CardContent>
@@ -778,6 +765,11 @@ export default function AdminDashboard({
                                 <>
                                   <Input type="tel" value={editLeadData.telefon} onChange={(e) => setEditLeadData({...editLeadData, telefon: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm" placeholder="Telefon" />
                                   <Input type="email" value={editLeadData.email} onChange={(e) => setEditLeadData({...editLeadData, email: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm" placeholder="Email" />
+                                  <select value={editLeadData.status} onChange={(e) => setEditLeadData({...editLeadData, status: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm">
+                                    <option value="nealocat">Nealocat</option>
+                                    <option value="alocat">Alocat</option>
+                                    <option value="complet_3_sesiuni">Absolvent ✓</option>
+                                  </select>
                                 </>
                               ) : (
                                 <>
@@ -874,8 +866,15 @@ export default function AdminDashboard({
                               {isEd ? <Input type="email" value={editLeadData.email} onChange={(e) => setEditLeadData({...editLeadData, email: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50" /> : lead.email}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex flex-col gap-1">
-                                <span className={"px-2 py-1 text-xs font-semibold rounded-full text-center border " + badge.bg}>{badge.label}</span>
+                              {isEd ? (
+                                <select value={editLeadData.status} onChange={(e) => setEditLeadData({...editLeadData, status: e.target.value})} className="w-full p-2 rounded-lg bg-gray-700/50 text-white border border-gray-600/50 text-sm">
+                                  <option value="nealocat">Nealocat</option>
+                                  <option value="alocat">Alocat</option>
+                                  <option value="complet_3_sesiuni">Absolvent ✓</option>
+                                </select>
+                              ) : (
+                                <div className="flex flex-col gap-1">
+                                  <span className={"px-2 py-1 text-xs font-semibold rounded-full text-center border " + badge.bg}>{badge.label}</span>
                                 {lead.status === LEAD_STATUS.ALOCAT && lead.dataAlocare && (
                                   <span className="text-xs text-gray-400 text-center">{formatTimeRemaining(getTimeUntilTimeout(lead))}</span>
                                 )}
@@ -890,6 +889,7 @@ export default function AdminDashboard({
                                   </span>
                                 )}
                               </div>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
                             <td className="px-4 py-3 text-sm text-gray-300 min-w-55">
