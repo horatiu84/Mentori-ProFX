@@ -27,7 +27,7 @@ export default function MentorDashboard({
   handleEditAttendance,
   getCompletedSession3TimeLeftMs,
   // Modals
-  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
+  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, handleResetDateSchedule, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showModal, modalConfig, closeModal, handleModalConfirm,
 }) {
   // Countdown timer state
@@ -112,12 +112,6 @@ export default function MentorDashboard({
             <span>{success}</span><button onClick={() => setSuccess("")} className="text-xl ml-4">&times;</button>
           </div>
         )}
-        {error && (
-          <div className="bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl flex justify-between items-center">
-            <span>{error}</span><button onClick={() => setError("")} className="text-xl ml-4">&times;</button>
-          </div>
-        )}
-
         {/* Mentor Stats */}
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-6">
@@ -461,10 +455,10 @@ export default function MentorDashboard({
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 max-w-md w-full animate-scaleIn">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className={"w-12 h-12 rounded-full flex items-center justify-center " + (modalConfig.type === 'confirm' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-blue-500/20 border-2 border-blue-500/50')}>
-                  <span className="text-2xl">{modalConfig.type === 'confirm' ? '\u26A0\uFE0F' : '\u2139\uFE0F'}</span>
+                <div className={"w-12 h-12 rounded-full flex items-center justify-center " + (modalConfig.type === 'confirm' || modalConfig.type === 'error' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-blue-500/20 border-2 border-blue-500/50')}>
+                  <span className="text-2xl">{modalConfig.type === 'confirm' || modalConfig.type === 'error' ? '\u26A0\uFE0F' : '\u2139\uFE0F'}</span>
                 </div>
-                <h3 className={"text-xl font-bold " + (modalConfig.type === 'confirm' ? 'text-red-400' : 'text-blue-400')}>{modalConfig.title}</h3>
+                <h3 className={"text-xl font-bold " + (modalConfig.type === 'confirm' || modalConfig.type === 'error' ? 'text-red-400' : 'text-blue-400')}>{modalConfig.title}</h3>
               </div>
               <p className="text-gray-300 text-base leading-relaxed mb-6">{modalConfig.message}</p>
               <div className="flex gap-3">
@@ -474,7 +468,7 @@ export default function MentorDashboard({
                     <button onClick={handleModalConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl transition-all font-medium">Confirma</button>
                   </>
                 ) : (
-                  <button onClick={closeModal} className="w-full bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-4 py-3 rounded-xl transition-all font-medium">Am inteles</button>
+                  <button onClick={closeModal} className={"w-full px-4 py-3 rounded-xl transition-all font-medium border " + (modalConfig.type === 'error' ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Am inteles</button>
                 )}
               </div>
             </div>
@@ -492,6 +486,7 @@ export default function MentorDashboard({
               <label className="block text-sm font-medium text-purple-300 mb-2">Sesiunea 1 — Data și Ora:</label>
               <Input type="datetime-local" value={manualDate} onChange={(e) => setManualDate(e.target.value)}
                 className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+              <p className="text-xs text-gray-500 mt-1">Las-o goală doar dacă vrei să resetezi tot programul.</p>
             </div>
             <div className="mb-4">
               <label className="block text-sm font-medium text-blue-300 mb-2">Sesiunea 2 — Data și Ora:</label>
@@ -505,9 +500,11 @@ export default function MentorDashboard({
                 className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
               <p className="text-xs text-gray-500 mt-1">Opțional — poți seta Sesiunea 3 mai târziu</p>
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button onClick={handleConfirmDate} disabled={loading}
                 className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-2 px-4 rounded-xl font-semibold transition-all">Salvează</button>
+              <button onClick={handleResetDateSchedule} disabled={loading}
+                className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 py-2 px-4 rounded-xl font-semibold transition-all">Reseteaza</button>
               <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); setManualDate3(''); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-2 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
             </div>

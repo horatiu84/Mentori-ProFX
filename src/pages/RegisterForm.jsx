@@ -173,7 +173,12 @@ export default function RegisterForm() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
       console.error('Eroare la înregistrare:', err);
-      setError('A apărut o eroare la înregistrare. Te rugăm să încerci din nou.');
+      const errorMessage = err?.message || '';
+      if (errorMessage.includes('duplicate key value') || errorMessage.includes('uq_leaduri_email_normalized')) {
+        setError('Acest email este deja înregistrat în sistem!');
+      } else {
+        setError('A apărut o eroare la înregistrare. Te rugăm să încerci din nou.');
+      }
     } finally {
       setLoading(false);
     }

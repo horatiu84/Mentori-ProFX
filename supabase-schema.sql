@@ -121,6 +121,7 @@ ALTER TABLE studenti ENABLE ROW LEVEL SECURITY;
 CREATE INDEX IF NOT EXISTS idx_leaduri_status ON leaduri(status);
 CREATE INDEX IF NOT EXISTS idx_leaduri_mentor ON leaduri("mentorAlocat");
 CREATE INDEX IF NOT EXISTS idx_leaduri_email ON leaduri(email);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_leaduri_email_normalized ON leaduri (LOWER(TRIM(email))) WHERE email IS NOT NULL AND TRIM(email) <> '';
 CREATE INDEX IF NOT EXISTS idx_leaduri_telefon ON leaduri(telefon);
 CREATE INDEX IF NOT EXISTS idx_alocari_mentor ON alocari("mentorId");
 CREATE INDEX IF NOT EXISTS idx_studenti_class ON studenti("classId");

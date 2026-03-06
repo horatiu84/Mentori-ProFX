@@ -7,6 +7,7 @@ import { formatDate, MENTORI_DISPONIBILI, MENTOR_PHOTOS, LEAD_STATUS, ONE_TO_TWE
 import AdminDashboard from "./components/AdminDashboard";
 import MentorDashboard from "./components/MentorDashboard";
 import { clearStoredAuth, getAuthUserFromToken, isTokenValid } from "./utils/auth";
+import { sanitizeEmail } from "./utils/sanitize";
 // ExcelJS se încarcă lazy doar când e nevoie (import/export)
 
 export default function Mentori1La20() {
@@ -112,9 +113,75 @@ export default function Mentori1La20() {
     }
   }, [ACCOUNTS_CACHE_KEY]);
 
+  const normalizeLeadEmail = (email) => sanitizeEmail(email || '');
+
+  const findLeadByEmail = async (email, excludeLeadId = null) => {
+    const normalizedEmail = normalizeLeadEmail(email);
+    if (!normalizedEmail) return null;
+
+    let query = supabase
+      .from('leaduri')
+      .select('id, nume, email')
+      .eq('email', normalizedEmail)
+      .limit(5);
+
+    if (excludeLeadId) {
+      query = query.neq('id', excludeLeadId);
+    }
+
+    const { data, error: fetchErr } = await query;
+    if (fetchErr) throw fetchErr;
+
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
+  };
+
+  const ensureLeadEmailIsUnique = async (email, options = {}) => {
+    const { excludeLeadId = null } = options;
+    const existingLead = await findLeadByEmail(email, excludeLeadId);
+    if (existingLead) {
+      throw new Error(`Exista deja un lead cu email-ul ${normalizeLeadEmail(email)}.`);
+    }
+  };
+
+  const ensureBatchLeadEmailsAreUnique = async (leadBatch) => {
+    const normalizedEmails = [];
+    const seenEmails = new Set();
+
+    leadBatch.forEach((lead, index) => {
+      const normalizedEmail = normalizeLeadEmail(lead.email);
+      if (!normalizedEmail) {
+        throw new Error('Linia ' + (index + 2) + ': email invalid sau lipsa');
+      }
+      if (seenEmails.has(normalizedEmail)) {
+        throw new Error('Fisierul contine email duplicat: ' + normalizedEmail);
+      }
+      seenEmails.add(normalizedEmail);
+      normalizedEmails.push(normalizedEmail);
+    });
+
+    if (normalizedEmails.length === 0) return;
+
+    const { data, error: fetchErr } = await supabase
+      .from('leaduri')
+      .select('email')
+      .in('email', normalizedEmails);
+
+    if (fetchErr) throw fetchErr;
+
+    if (Array.isArray(data) && data.length > 0) {
+      const existingEmail = normalizeLeadEmail(data[0].email);
+      throw new Error('Email deja existent in sistem: ' + existingEmail);
+    }
+  };
+
   // ==================== MODAL HELPERS ====================
   const showAlert = (title, message) => {
     setModalConfig({ type: 'alert', title, message, onConfirm: null });
+    setShowModal(true);
+  };
+
+  const showErrorModal = (message) => {
+    setModalConfig({ type: 'error', title: 'Eroare', message, onConfirm: null });
     setShowModal(true);
   };
 
@@ -128,6 +195,13 @@ export default function Mentori1La20() {
     if (modalConfig.onConfirm) modalConfig.onConfirm();
     closeModal();
   };
+  const closeDateModal = () => {
+    setShowDateModal(false);
+    setSelectedMentorForDate(null);
+    setManualDate('');
+    setManualDate2('');
+    setManualDate3('');
+  };
 
   // ==================== FETCH FUNCTIONS ====================
   
@@ -138,7 +212,8 @@ export default function Mentori1La20() {
     LEAD_STATUS.COMPLET_3_SESIUNI,
     LEAD_STATUS.COMPLET_2_SESIUNI,
     LEAD_STATUS.COMPLET_SESIUNE_FINALA,
-    LEAD_STATUS.COMPLET_SESIUNE_1
+    LEAD_STATUS.COMPLET_SESIUNE_1,
+    LEAD_STATUS.NO_SHOW
   ];
   const isFinalizedProgramLead = (lead) => FINALIZED_PROGRAM_STATUSES.includes(lead?.status);
 
@@ -208,7 +283,7 @@ export default function Mentori1La20() {
         if (checkLeadTimeout(lead)) {
           expired++;
           await supabase.from("leaduri").update({
-            status: LEAD_STATUS.NECONFIRMAT, motivNeconfirmare: 'Timeout 6h', dataTimeout: new Date().toISOString()
+            status: LEAD_STATUS.NECONFIRMAT, motivNeconfirmare: 'Timeout 6h', dataExpirare: new Date().toISOString()
           }).eq("id", lead.id);
         }
       }
@@ -545,6 +620,12 @@ Echipa ProFX`,
           const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
           const mentorActual = lead.mentorAlocat;
           
+          const MAX_REALOCARI = 5;
+          if ((lead.numarReAlocari || 0) >= MAX_REALOCARI) {
+            console.warn(`⚠️ Lead "${lead.nume}" a atins limita de ${MAX_REALOCARI} re-alocări — skip`);
+            continue;
+          }
+
           const mentorNou = mentoriSortati.find(m => {
             const leadCnt = localLeadCounts[m.id] || 0;
             // Sare mentorii care sunt în program activ (au webinar programat/confirmat)
@@ -769,28 +850,28 @@ Echipa ProFX`,
   }, [isAuthenticated, currentRole, fetchUsersAccounts]);
 
   useEffect(() => {
-    const now = Date.now();
-    const timeSinceLastCheck = now - lastAutoAllocCheckRef.current;
-    
-    if (isAuthenticated && leaduri.length > 0 && mentoriData.length > 0 && !loadingData && !isAutoAllocatingRef.current && timeSinceLastCheck > 10000) {
-      const verificaAutoAlocare = async () => {
-        isAutoAllocatingRef.current = true;
-        lastAutoAllocCheckRef.current = Date.now();
-        
-        const modificari = await checkAndAutoAllocate();
-        
-        if (modificari) {
-          setTimeout(async () => {
-            await fetchAllData();
-            isAutoAllocatingRef.current = false;
-          }, 1000);
-        } else {
-          isAutoAllocatingRef.current = false;
-        }
-      };
-      verificaAutoAlocare();
-    }
-  }, [leaduri, mentoriData, isAuthenticated, loadingData, checkAndAutoAllocate, fetchAllData]);
+    if (!error) return;
+    showErrorModal(error);
+    setError('');
+  }, [error]);
+
+  // AUTO-ALLOCATION DISABLED — was causing race conditions and unwanted re-allocations.
+  // The admin can still use the "Aloca Automat (FIFO)" button for manual FIFO allocation.
+  // useEffect(() => {
+  //   const now = Date.now();
+  //   const timeSinceLastCheck = now - lastAutoAllocCheckRef.current;
+  //   if (isAuthenticated && leaduri.length > 0 && mentoriData.length > 0 && !loadingData && !isAutoAllocatingRef.current && timeSinceLastCheck > 10000) {
+  //     const verificaAutoAlocare = async () => {
+  //       isAutoAllocatingRef.current = true;
+  //       lastAutoAllocCheckRef.current = Date.now();
+  //       const modificari = await checkAndAutoAllocate();
+  //       if (modificari) {
+  //         setTimeout(async () => { await fetchAllData(); isAutoAllocatingRef.current = false; }, 1000);
+  //       } else { isAutoAllocatingRef.current = false; }
+  //     };
+  //     verificaAutoAlocare();
+  //   }
+  // }, [leaduri, mentoriData, isAuthenticated, loadingData, checkAndAutoAllocate, fetchAllData]);
 
   // ==================== HANDLERS ====================
 
@@ -838,7 +919,7 @@ Echipa ProFX`,
             const telefon = row['Telefon'] || row['telefon'] || row['Phone'] || row['phone'] || '';
             const email = row['Email'] || row['email'] || '';
             if (!nume || !telefon || !email) throw new Error('Linia ' + (index + 2) + ': Nume, telefon si email sunt obligatorii');
-            return { nume: String(nume).trim(), telefon: String(telefon).trim(), email: String(email).trim(),
+            return { nume: String(nume).trim(), telefon: String(telefon).trim(), email: normalizeLeadEmail(String(email)),
               status: LEAD_STATUS.NEALOCAT, mentorAlocat: null, dataAlocare: null, dataConfirmare: null,
               dataTimeout: null, statusOneToTwenty: ONE_TO_TWENTY_STATUS.PENDING, dataOneToTwenty: null,
               numarReAlocari: 0, istoricMentori: [], createdAt: new Date().toISOString() };
@@ -856,6 +937,7 @@ Echipa ProFX`,
     setLoading(true); setError(""); setSuccess("");
     try {
       const leaduriNoi = await parseExcelFile(uploadFile);
+      await ensureBatchLeadEmailsAreUnique(leaduriNoi);
       for (const lead of leaduriNoi) {
         const { error: insErr } = await supabase.from("leaduri").insert(lead);
         if (insErr) throw insErr;
@@ -871,8 +953,11 @@ Echipa ProFX`,
     if (!manualLead.nume || !manualLead.telefon || !manualLead.email) { setError("Numele, telefonul si email-ul sunt obligatorii"); return; }
     setLoading(true); setError(""); setSuccess("");
     try {
+      const normalizedEmail = normalizeLeadEmail(manualLead.email);
+      await ensureLeadEmailIsUnique(normalizedEmail);
+
       const { error: insErr } = await supabase.from("leaduri").insert({
-        nume: manualLead.nume.trim(), telefon: manualLead.telefon.trim(), email: manualLead.email.trim(),
+        nume: manualLead.nume.trim(), telefon: manualLead.telefon.trim(), email: normalizedEmail,
         status: LEAD_STATUS.NEALOCAT, mentorAlocat: null, dataAlocare: null, dataConfirmare: null,
         dataTimeout: null, statusOneToTwenty: ONE_TO_TWENTY_STATUS.PENDING, dataOneToTwenty: null,
         numarReAlocari: 0, istoricMentori: [], createdAt: new Date().toISOString()
@@ -1135,23 +1220,54 @@ Echipa ProFX`,
     }
   };
 
-  const updateOneToTwenty = async (mentorId, customDate, customDate2, customDate3) => {
+  const updateOneToTwenty = async (mentorId, customDate, customDate2, customDate3, options = {}) => {
+    const { resetAll = false } = options;
+
+    if (!mentorId) {
+      setError('Mentor invalid pentru actualizarea sesiunilor.');
+      return false;
+    }
+
+    if (!resetAll && !customDate) {
+      setError('Sesiunea 1 este obligatorie. Pentru a sterge toate sesiunile, foloseste resetarea.');
+      return false;
+    }
+
+    setLoading(true);
+    setError('');
     try {
-      const updates = {};
-      if (customDate) updates.ultimulOneToTwenty = new Date(customDate).toISOString();
-      if (customDate2) updates.webinar2Date = new Date(customDate2).toISOString();
-      if (customDate3) updates.webinar3Date = new Date(customDate3).toISOString();
-      if (Object.keys(updates).length === 0) { setError('Te rog selecteaza cel putin o data!'); return; }
-      await supabase.from('mentori').update(updates).eq('id', mentorId);
-      await fetchMentori(); setSuccess('Datele webinarului actualizate!');
-      setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); setManualDate3('');
-    } catch (err) { setError('Eroare la actualizarea datei 1:20'); }
+      const updates = resetAll
+        ? {
+            ultimulOneToTwenty: null,
+            webinar2Date: null,
+            webinar3Date: null,
+          }
+        : {
+            ultimulOneToTwenty: new Date(customDate).toISOString(),
+            webinar2Date: customDate2 ? new Date(customDate2).toISOString() : null,
+            webinar3Date: customDate3 ? new Date(customDate3).toISOString() : null,
+          };
+
+      const { error: updateErr } = await supabase.from('mentori').update(updates).eq('id', mentorId);
+      if (updateErr) throw updateErr;
+
+      await fetchMentori();
+      setSuccess(resetAll ? 'Programul webinar 1:20 a fost resetat.' : 'Datele webinarului actualizate!');
+      closeDateModal();
+      return true;
+    } catch (err) {
+      console.error('Eroare la actualizarea sesiunilor 1:20:', err);
+      setError('Eroare la actualizarea datei 1:20');
+      return false;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const openDateModal = (mentorId) => {
     setSelectedMentorForDate(mentorId);
     const mentor = mentoriData.find(m => m.id === mentorId);
-    setManualDate(mentor?.ultimulOneToTwenty ? new Date(mentor.ultimulOneToTwenty).toISOString().slice(0, 16) : new Date().toISOString().slice(0, 16));
+    setManualDate(mentor?.ultimulOneToTwenty ? new Date(mentor.ultimulOneToTwenty).toISOString().slice(0, 16) : '');
     setManualDate2(mentor?.webinar2Date ? new Date(mentor.webinar2Date).toISOString().slice(0, 16) : '');
     setManualDate3(mentor?.webinar3Date ? new Date(mentor.webinar3Date).toISOString().slice(0, 16) : '');
     setShowDateModal(true);
@@ -1291,8 +1407,26 @@ Echipa ProFX`,
   };
 
   const handleConfirmDate = () => {
-    if (!manualDate && !manualDate2 && !manualDate3) { setError('Te rog selecteaza cel putin o data!'); return; }
+    if (!manualDate && !manualDate2 && !manualDate3) {
+      updateOneToTwenty(selectedMentorForDate, '', '', '', { resetAll: true });
+      return;
+    }
     updateOneToTwenty(selectedMentorForDate, manualDate, manualDate2, manualDate3);
+  };
+
+  const handleResetDateSchedule = () => {
+    if (!selectedMentorForDate) {
+      setError('Selecteaza un mentor pentru resetarea sesiunilor.');
+      return;
+    }
+
+    showConfirmDialog(
+      'Resetare Program 1:20',
+      'Resetezi toate cele 3 sesiuni pentru acest mentor? Mentorul va aparea fara nicio sesiune setata.',
+      async () => {
+        await updateOneToTwenty(selectedMentorForDate, '', '', '', { resetAll: true });
+      }
+    );
   };
 
   const openEmailTemplateEditor = () => {
@@ -1484,7 +1618,52 @@ Echipa ProFX`,
     if (totalPrezente === 3) return LEAD_STATUS.COMPLET_3_SESIUNI;
     if (totalPrezente === 2) return LEAD_STATUS.COMPLET_2_SESIUNI;
     if (totalPrezente === 1) return LEAD_STATUS.COMPLET_SESIUNE_1;
-    return LEAD_STATUS.NEALOCAT;
+    return LEAD_STATUS.NO_SHOW; // 0 sessions attended — finalized, not re-allocable
+  };
+
+  const getLeadProgramMentorId = (lead) => {
+    const historyMentors = Array.isArray(lead?.istoricMentori)
+      ? lead.istoricMentori.filter(Boolean)
+      : [];
+
+    return lead?.mentorAlocat || historyMentors[historyMentors.length - 1] || null;
+  };
+
+  const finalizeLeadProgram = async (lead, finalUpdates) => {
+    const historyMentors = Array.isArray(lead?.istoricMentori)
+      ? lead.istoricMentori.filter(Boolean)
+      : [];
+    const mentorProgramId = getLeadProgramMentorId(lead);
+    const mergedHistory = [...historyMentors];
+
+    if (mentorProgramId && mergedHistory[mergedHistory.length - 1] !== mentorProgramId) {
+      mergedHistory.push(mentorProgramId);
+    }
+
+    if (lead.alocareId) {
+      const alocareCurenta = alocariActive.find(a => a.id === lead.alocareId);
+      if (alocareCurenta) {
+        const leaduriRamase = (alocareCurenta.leaduri || []).filter(id => id !== lead.id);
+        if (leaduriRamase.length === 0) {
+          await supabase.from('alocari').delete().eq('id', lead.alocareId);
+        } else {
+          await supabase.from('alocari').update({
+            numarLeaduri: leaduriRamase.length,
+            leaduri: leaduriRamase,
+            ultimaActualizare: new Date().toISOString()
+          }).eq('id', lead.alocareId);
+        }
+      }
+    }
+
+    const { error: updateErr } = await supabase.from('leaduri').update({
+      ...finalUpdates,
+      mentorAlocat: null,
+      alocareId: null,
+      istoricMentori: mergedHistory,
+    }).eq('id', lead.id);
+
+    if (updateErr) throw updateErr;
   };
 
   const getCompletedSession3TimeLeftMs = (lead, nowTs = Date.now()) => {
@@ -1530,12 +1709,12 @@ Echipa ProFX`,
         const lead = leaduri.find(l => l.id === leadId);
         if (!lead) throw new Error('Lead negăsit');
         const finalStatus = computeFinalStatus(lead.prezenta1, lead.prezenta2, true);
-        await supabase.from('leaduri').update({
+        await finalizeLeadProgram(lead, {
           prezenta3: true,
           status: finalStatus,
           dataOneToTwenty: new Date().toISOString()
-        }).eq('id', leadId);
-        await fetchLeaduri(); setSuccess('Lead marcat ca Prezent la Sesiunea 3. Program finalizat!');
+        });
+        await fetchAllData(); setSuccess('Lead marcat ca Prezent la Sesiunea 3. Program finalizat!');
       } catch (err) { setError('Eroare la marcarea prezenței'); } finally { setLoading(false); }
     });
   };
@@ -1547,26 +1726,14 @@ Echipa ProFX`,
         const lead = leaduri.find(l => l.id === leadId);
         if (!lead) throw new Error('Lead negăsit');
         const finalStatus = computeFinalStatus(lead.prezenta1, lead.prezenta2, false);
-        const updates = {
+        await finalizeLeadProgram(lead, {
           prezenta3: false,
           status: finalStatus,
           dataOneToTwenty: new Date().toISOString()
-        };
-        if (finalStatus === LEAD_STATUS.NEALOCAT) {
-          updates.mentorAlocat = null;
-          updates.prezenta1 = null;
-          updates.prezenta2 = null;
-          updates.prezenta3 = null;
-          updates.dataAlocare = null;
-          updates.dataConfirmare = null;
-          updates.emailTrimis = false;
-          updates.dataTimeout = null;
-          updates.numarReAlocari = (lead.numarReAlocari || 0) + 1;
-        }
-        await supabase.from('leaduri').update(updates).eq('id', leadId);
-        await fetchLeaduri();
-        setSuccess(finalStatus === LEAD_STATUS.NEALOCAT
-          ? 'No-Show la toate sesiunile — leadul va fi disponibil pentru re-alocare.'
+        });
+        await fetchAllData();
+        setSuccess(finalStatus === LEAD_STATUS.NO_SHOW
+          ? 'No-Show la toate sesiunile — programul a fost finalizat.'
           : 'Lead marcat la Sesiunea 3. Program finalizat.');
       } catch (err) { setError('Eroare la marcarea prezenței'); } finally { setLoading(false); }
     });
@@ -1595,12 +1762,17 @@ Echipa ProFX`,
       } else {
         updates.prezenta3 = newValue;
         updates.status = computeFinalStatus(lead.prezenta1, lead.prezenta2, newValue);
-        if (updates.status !== LEAD_STATUS.NEALOCAT) {
-          updates.dataOneToTwenty = new Date().toISOString();
-        }
+        updates.dataOneToTwenty = new Date().toISOString();
       }
-      await supabase.from('leaduri').update(updates).eq('id', leadId);
-      await fetchLeaduri();
+
+      if (updates.status && isFinalizedProgramLead({ status: updates.status })) {
+        await finalizeLeadProgram(lead, updates);
+        await fetchAllData();
+      } else {
+        await supabase.from('leaduri').update(updates).eq('id', leadId);
+        await fetchLeaduri();
+      }
+
       setSuccess('Prezența a fost corectată cu succes!');
     } catch (err) { setError('Eroare la editarea prezenței: ' + (err.message || '')); } finally { setLoading(false); }
   };
@@ -1611,6 +1783,10 @@ Echipa ProFX`,
       try {
         const lead = leaduri.find(l => l.id === leadId);
         if (!lead) { setError("Lead negasit"); return; }
+        if (isFinalizedProgramLead(lead)) {
+          setError('Leadul a finalizat programul si nu mai poate fi realocat.');
+          return;
+        }
         const mentDisp = mentoriData.filter(m => {
           const leadCnt = m.leaduriAlocate || 0;
           return m.id !== lead.mentorAlocat && leadCnt < 30 && m.available && !m.manuallyDisabled;
@@ -1730,8 +1906,9 @@ Echipa ProFX`,
       const ExcelJS = (await import('exceljs')).default;
 
       const getMentorNume = (lead) => {
-        const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
-        const mentor = mentoriData.find(m => m.id === lead.mentorAlocat);
+        const mentorId = getLeadProgramMentorId(lead);
+        const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === mentorId);
+        const mentor = mentoriData.find(m => m.id === mentorId);
         return mentorInfo ? mentorInfo.nume : (mentor ? mentor.nume : '');
       };
 
@@ -1827,11 +2004,32 @@ Echipa ProFX`,
     if (!editLeadData.nume || !editLeadData.telefon || !editLeadData.email) { setError("Toate campurile sunt obligatorii"); return; }
     setLoading(true); setError(""); setSuccess("");
     try {
-      const updatePayload = { nume: editLeadData.nume.trim(), telefon: editLeadData.telefon.trim(), email: editLeadData.email.trim() };
+      const lead = leaduri.find(l => l.id === leadId);
+      if (!lead) throw new Error('Lead negasit');
+
+      const normalizedEmail = normalizeLeadEmail(editLeadData.email);
+      await ensureLeadEmailIsUnique(normalizedEmail, { excludeLeadId: leadId });
+
+      const updatePayload = { nume: editLeadData.nume.trim(), telefon: editLeadData.telefon.trim(), email: normalizedEmail };
       if (editLeadData.status) updatePayload.status = editLeadData.status;
-      await supabase.from("leaduri").update(updatePayload).eq("id", leadId);
-      setSuccess("Lead actualizat cu succes!"); setEditingLead(null); await fetchLeaduri();
-    } catch (err) { setError("Eroare la actualizarea leadului"); } finally { setLoading(false); }
+
+      if (updatePayload.status && isFinalizedProgramLead({ status: updatePayload.status })) {
+        await finalizeLeadProgram(lead, updatePayload);
+        await fetchAllData();
+      } else {
+        await supabase.from("leaduri").update(updatePayload).eq("id", leadId);
+        await fetchLeaduri();
+      }
+
+      setSuccess("Lead actualizat cu succes!"); setEditingLead(null);
+    } catch (err) {
+      const errorMessage = err?.message || '';
+      if (errorMessage) {
+        setError(errorMessage);
+      } else {
+        setError("Eroare la actualizarea leadului");
+      }
+    } finally { setLoading(false); }
   };
 
   const handleCancelEdit = () => { setEditingLead(null); setEditLeadData({ nume: '', telefon: '', email: '', status: '' }); };
@@ -1841,7 +2039,7 @@ Echipa ProFX`,
       setLoading(true);
       try {
         await supabase.from("leaduri").delete().eq("id", lead.id);
-        if (lead.status === 'alocat' && lead.mentorAlocat) {
+        if (lead.mentorAlocat && ACTIVE_PROGRAM_STATUSES.includes(lead.status)) {
           const m = mentoriData.find(x => x.id === lead.mentorAlocat);
           if (m) await supabase.from("mentori").update({ leaduriAlocate: Math.max(0, (m.leaduriAlocate || 0) - 1) }).eq("id", lead.mentorAlocat);
           if (lead.alocareId) {
@@ -1892,7 +2090,7 @@ Echipa ProFX`,
     const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
     const mentorEligibil = mentoriSortati.find(m => {
       const leadCnt = m.leaduriAlocate || 0;
-      return leadCnt < 30 && (m.available || (leadCnt >= 20 && leadCnt < 30)) && !m.manuallyDisabled;
+      return leadCnt < 30 && m.available && !m.manuallyDisabled;
     });
     if (!mentorEligibil) return false;
     const leadCnt = mentorEligibil.leaduriAlocate || 0;
@@ -2029,7 +2227,7 @@ Echipa ProFX`,
         showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
         manualDate2={manualDate2} setManualDate2={setManualDate2}
         manualDate3={manualDate3} setManualDate3={setManualDate3}
-        handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}
+        handleConfirmDate={handleConfirmDate} handleResetDateSchedule={handleResetDateSchedule} setShowDateModal={setShowDateModal}
         selectedMentorForDate={selectedMentorForDate} setSelectedMentorForDate={setSelectedMentorForDate}
         showAdminEmailModal={showAdminEmailModal} selectedMentorForEmail={selectedMentorForEmail}
         setShowAdminEmailModal={setShowAdminEmailModal}
@@ -2082,7 +2280,7 @@ Echipa ProFX`,
       showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
       manualDate2={manualDate2} setManualDate2={setManualDate2}
       manualDate3={manualDate3} setManualDate3={setManualDate3}
-      handleConfirmDate={handleConfirmDate} setShowDateModal={setShowDateModal}
+      handleConfirmDate={handleConfirmDate} handleResetDateSchedule={handleResetDateSchedule} setShowDateModal={setShowDateModal}
       selectedMentorForDate={selectedMentorForDate} setSelectedMentorForDate={setSelectedMentorForDate}
       showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
     />

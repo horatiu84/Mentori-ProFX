@@ -34,7 +34,7 @@ export default function AdminDashboard({
   handleEditLead, handleSaveEditLead, handleCancelEdit,
   handleReallocateLead, handleDeleteLead,
   // Modals
-  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
+  showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, handleResetDateSchedule, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showAdminEmailModal, selectedMentorForEmail, setShowAdminEmailModal,
   bulkEmailPreview, setBulkEmailPreview, showBulkEmailPreview, sendBulkEmail,
   emailTemplate, showEmailTemplateEditor, editingTemplate, setEditingTemplate,
@@ -97,6 +97,16 @@ export default function AdminDashboard({
 
     return { totalAllocations, mentors };
   };
+
+  const getLeadProgramMentorId = (lead) => {
+    const historyMentors = Array.isArray(lead?.istoricMentori)
+      ? lead.istoricMentori.filter(Boolean)
+      : [];
+
+    return lead?.mentorAlocat || historyMentors[historyMentors.length - 1] || null;
+  };
+
+  const getLeadProgramMentorName = (lead) => getMentorDisplayName(getLeadProgramMentorId(lead));
 
   const getAccountForm = (account) => {
     return accountForms[account.id] || {
@@ -217,13 +227,6 @@ export default function AdminDashboard({
             <button onClick={() => setSuccess("")} className="text-xl ml-4">&times;</button>
           </div>
         )}
-        {error && (
-          <div className="bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl flex justify-between items-center">
-            <span>{error}</span>
-            <button onClick={() => setError("")} className="text-xl ml-4">&times;</button>
-          </div>
-        )}
-
         <Card className="bg-gray-900/50 backdrop-blur-sm border border-gray-700/50 shadow-2xl">
           <CardContent className="p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -816,7 +819,7 @@ export default function AdminDashboard({
                             </>
                           ) : (
                             <>
-                              {(lead.status === LEAD_STATUS.NECONFIRMAT || lead.status === LEAD_STATUS.NO_SHOW) && (
+                              {lead.status === LEAD_STATUS.NECONFIRMAT && (
                                 <button onClick={() => handleReallocateLead(lead.id)} disabled={loading}
                                   className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Re-aloca</button>
                               )}
@@ -911,7 +914,7 @@ export default function AdminDashboard({
                                 </div>
                               ) : (
                                 <div className="flex flex-col gap-1.5">
-                                  {(lead.status === LEAD_STATUS.NECONFIRMAT || lead.status === LEAD_STATUS.NO_SHOW) && (
+                                  {lead.status === LEAD_STATUS.NECONFIRMAT && (
                                     <button onClick={() => handleReallocateLead(lead.id)} disabled={loading}
                                       className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">Re-aloca</button>
                                   )}
@@ -990,7 +993,7 @@ export default function AdminDashboard({
                     {/* Mobile */}
                     <div className="block md:hidden space-y-3">
                       {absolventiCurenti.map((lead, index) => {
-                        const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                        const mentorName = getLeadProgramMentorName(lead);
                         const isEd = editingLead === lead.id;
                         return (
                           <div key={lead.id} className="bg-emerald-900/10 border border-emerald-700/30 rounded-xl p-4 space-y-2">
@@ -1021,7 +1024,7 @@ export default function AdminDashboard({
                               {lead.prezenta3 != null && <span className={"text-xs px-2 py-0.5 rounded-full border " + (lead.prezenta3 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S3 {lead.prezenta3 ? '✅' : '❌'}</span>}
                             </div>
                             <div className="flex items-center justify-between text-xs text-gray-400 pt-1 border-t border-gray-700/30">
-                              <span>{mentorInfo ? mentorInfo.nume : '-'}</span>
+                              <span>{mentorName}</span>
                               <span>{formatDate(lead.createdAt)}</span>
                             </div>
                             <div className="flex gap-2">
@@ -1058,7 +1061,7 @@ export default function AdminDashboard({
                         </thead>
                         <tbody className="divide-y divide-gray-700/30">
                           {absolventiCurenti.map((lead, index) => {
-                            const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === lead.mentorAlocat);
+                            const mentorName = getLeadProgramMentorName(lead);
                             const isEd = editingLead === lead.id;
                             return (
                               <tr key={lead.id} className="hover:bg-emerald-900/10 transition-all">
@@ -1079,7 +1082,7 @@ export default function AdminDashboard({
                                     {lead.prezenta3 != null && <span className={"text-xs px-2 py-0.5 rounded-full border text-center " + (lead.prezenta3 ? 'bg-green-500/20 border-green-500/50 text-green-300' : 'bg-orange-500/20 border-orange-500/50 text-orange-300')}>S3 {lead.prezenta3 ? '✅' : '❌'}</span>}
                                   </div>
                                 </td>
-                                <td className="px-4 py-3 text-sm text-gray-300">{mentorInfo ? mentorInfo.nume : '-'}</td>
+                                <td className="px-4 py-3 text-sm text-gray-300">{mentorName}</td>
                                 <td className="px-4 py-3 text-sm text-gray-400">{formatDate(lead.createdAt)}</td>
                                 <td className="px-4 py-3 text-sm">
                                   {isEd ? (
@@ -1261,6 +1264,7 @@ export default function AdminDashboard({
                 <label className="block text-sm font-semibold text-purple-300 mb-2">📅 Sesiunea 1 *</label>
                 <Input type="datetime-local" value={manualDate} onChange={(e) => setManualDate(e.target.value)}
                   className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
+                <p className="text-xs text-gray-500 mt-1">Las-o goală doar dacă vrei să resetezi tot programul.</p>
               </div>
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-3">
                 <label className="block text-sm font-semibold text-blue-300 mb-2">📅 Sesiunea 2 <span className="text-xs text-gray-400 font-normal">(opțional)</span></label>
@@ -1273,9 +1277,11 @@ export default function AdminDashboard({
                   className="w-full p-3 rounded-xl bg-gray-800/50 text-white border border-gray-600/50" />
               </div>
             </div>
-            <div className="flex gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button onClick={handleConfirmDate} disabled={loading}
                 className="flex-1 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-300 py-2 px-4 rounded-xl font-semibold transition-all">Confirma</button>
+              <button onClick={handleResetDateSchedule} disabled={loading}
+                className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 py-2 px-4 rounded-xl font-semibold transition-all">Reseteaza</button>
               <button onClick={() => { setShowDateModal(false); setSelectedMentorForDate(null); setManualDate(''); setManualDate2(''); setManualDate3(''); }}
                 className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 py-2 px-4 rounded-xl font-semibold transition-all">Anuleaza</button>
             </div>
@@ -1620,10 +1626,10 @@ export default function AdminDashboard({
           <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-gray-700/50 max-w-md w-full animate-scaleIn">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
-                <div className={"w-12 h-12 rounded-full flex items-center justify-center " + (modalConfig.type === 'confirm' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-blue-500/20 border-2 border-blue-500/50')}>
-                  <span className="text-2xl">{modalConfig.type === 'confirm' ? '\u26A0\uFE0F' : '\u2139\uFE0F'}</span>
+                <div className={"w-12 h-12 rounded-full flex items-center justify-center " + (modalConfig.type === 'confirm' || modalConfig.type === 'error' ? 'bg-red-500/20 border-2 border-red-500/50' : 'bg-blue-500/20 border-2 border-blue-500/50')}>
+                  <span className="text-2xl">{modalConfig.type === 'confirm' || modalConfig.type === 'error' ? '\u26A0\uFE0F' : '\u2139\uFE0F'}</span>
                 </div>
-                <h3 className={"text-xl font-bold " + (modalConfig.type === 'confirm' ? 'text-red-400' : 'text-blue-400')}>{modalConfig.title}</h3>
+                <h3 className={"text-xl font-bold " + (modalConfig.type === 'confirm' || modalConfig.type === 'error' ? 'text-red-400' : 'text-blue-400')}>{modalConfig.title}</h3>
               </div>
               <p className="text-gray-300 text-base leading-relaxed mb-6">{modalConfig.message}</p>
               <div className="flex gap-3">
@@ -1633,7 +1639,7 @@ export default function AdminDashboard({
                     <button onClick={handleModalConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl transition-all font-medium">Confirma</button>
                   </>
                 ) : (
-                  <button onClick={closeModal} className="w-full bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-4 py-3 rounded-xl transition-all font-medium">Am inteles</button>
+                  <button onClick={closeModal} className={"w-full px-4 py-3 rounded-xl transition-all font-medium border " + (modalConfig.type === 'error' ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Am inteles</button>
                 )}
               </div>
             </div>
