@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
+import { LEAD_STATUS } from '../constants';
 import logo from '../logo2.png';
 
 const ZOOM_LINKS = {
@@ -11,15 +12,6 @@ const ZOOM_LINKS = {
   dan:    { url: 'https://us06web.zoom.us/j/84497687444', meetingId: '844 9768 7444', passcode: 'Dan' },
   tudor:  { url: 'https://us06web.zoom.us/j/84059943113', meetingId: '840 5994 3113', passcode: 'Tudor' },
   adrian: null,
-};
-
-const LEAD_STATUS = {
-  NEALOCAT: 'nealocat',
-  ALOCAT: 'alocat',
-  CONFIRMAT: 'confirmat',
-  NECONFIRMAT: 'neconfirmat',
-  NO_SHOW: 'no_show',
-  COMPLET: 'complet'
 };
 
 export default function ConfirmWebinar() {
@@ -44,7 +36,7 @@ export default function ConfirmWebinar() {
         const { data: leadDoc, error: fetchError } = await supabase
           .from('leaduri')
           .select('*')
-          .eq('id', token)
+          .eq('confirmationToken', token)
           .single();
 
         if (fetchError || !leadDoc) {
@@ -90,7 +82,7 @@ export default function ConfirmWebinar() {
             dataConfirmare: new Date().toISOString(),
             confirmatPrinLink: true
           })
-          .eq('id', token);
+          .eq('confirmationToken', token);
 
         if (updateError) throw updateError;
 

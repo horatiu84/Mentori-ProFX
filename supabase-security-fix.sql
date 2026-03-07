@@ -43,35 +43,54 @@ CREATE POLICY "users_service_role_only"
   WITH CHECK (auth.role() = 'service_role');
 
 -- ==================== MENTORI ====================
-CREATE POLICY "mentori_public_all"
+-- Anyone can read mentors (public webinar info)
+CREATE POLICY "mentori_select_public"
+  ON mentori
+  FOR SELECT
+  TO public
+  USING (true);
+
+-- Only authenticated users (dashboard) can modify mentors
+CREATE POLICY "mentori_modify_authenticated"
   ON mentori
   FOR ALL
-  TO public
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+-- Service role (edge functions) can modify mentors
+CREATE POLICY "mentori_modify_service"
+  ON mentori
+  FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);
 
 -- ==================== LEADURI ====================
--- Public flows (register + confirm link)
+-- Anon can read leads (needed for confirmation page lookup)
 CREATE POLICY "leaduri_anon_select"
   ON leaduri
   FOR SELECT
   TO anon
   USING (true);
 
+-- Anon can insert leads (public registration form)
 CREATE POLICY "leaduri_anon_insert"
   ON leaduri
   FOR INSERT
   TO anon
   WITH CHECK (true);
 
-CREATE POLICY "leaduri_anon_update"
+-- Anon can update only specific fields for confirmation (status, dataConfirmare, confirmatPrinLink)
+-- Restricted: only leads with status='alocat' can be confirmed by anon
+CREATE POLICY "leaduri_anon_update_confirm"
   ON leaduri
   FOR UPDATE
   TO anon
-  USING (true)
-  WITH CHECK (true);
+  USING (status = 'alocat')
+  WITH CHECK (status IN ('alocat', 'confirmat'));
 
--- Authenticated dashboard access
+-- Authenticated dashboard access (full CRUD)
 CREATE POLICY "leaduri_authenticated_all"
   ON leaduri
   FOR ALL
@@ -79,33 +98,82 @@ CREATE POLICY "leaduri_authenticated_all"
   USING (true)
   WITH CHECK (true);
 
+-- Service role (edge functions) full access
+CREATE POLICY "leaduri_service_all"
+  ON leaduri
+  FOR ALL
+  TO service_role
+  USING (true)
+  WITH CHECK (true);
+
 -- ==================== ALOCARI ====================
-CREATE POLICY "alocari_public_all"
+-- Only authenticated users can access allocations
+CREATE POLICY "alocari_select_public"
+  ON alocari
+  FOR SELECT
+  TO public
+  USING (true);
+
+CREATE POLICY "alocari_modify_authenticated"
   ON alocari
   FOR ALL
-  TO public
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "alocari_modify_service"
+  ON alocari
+  FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);
 
 -- ==================== SETTINGS ====================
-CREATE POLICY "settings_public_all"
+-- Anyone can read settings (email templates loaded on frontend)
+CREATE POLICY "settings_select_public"
+  ON settings
+  FOR SELECT
+  TO public
+  USING (true);
+
+-- Only authenticated users can modify settings
+CREATE POLICY "settings_modify_authenticated"
   ON settings
   FOR ALL
-  TO public
+  TO authenticated
+  USING (true)
+  WITH CHECK (true);
+
+CREATE POLICY "settings_modify_service"
+  ON settings
+  FOR ALL
+  TO service_role
   USING (true)
   WITH CHECK (true);
 
 -- ==================== CLASE / STUDENTI ====================
-CREATE POLICY "clase_public_all"
+CREATE POLICY "clase_select_public"
+  ON clase
+  FOR SELECT
+  TO public
+  USING (true);
+
+CREATE POLICY "clase_modify_authenticated"
   ON clase
   FOR ALL
-  TO public
+  TO authenticated
   USING (true)
   WITH CHECK (true);
 
-CREATE POLICY "studenti_public_all"
+CREATE POLICY "studenti_select_public"
+  ON studenti
+  FOR SELECT
+  TO public
+  USING (true);
+
+CREATE POLICY "studenti_modify_authenticated"
   ON studenti
   FOR ALL
-  TO public
+  TO authenticated
   USING (true)
   WITH CHECK (true);

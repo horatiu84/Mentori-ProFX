@@ -3,19 +3,11 @@ import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { sanitizeText, sanitizeEmail, sanitizePhone, containsSuspiciousContent } from '../utils/sanitize';
+import { LEAD_STATUS } from '../constants';
 import logo from '../logo2.png';
 
 // Rate limiting: minim 3 secunde între submisii
 const SUBMIT_COOLDOWN_MS = 3000;
-
-const LEAD_STATUS = {
-  NEALOCAT: 'nealocat',
-  ALOCAT: 'alocat',
-  CONFIRMAT: 'confirmat',
-  NECONFIRMAT: 'neconfirmat',
-  NO_SHOW: 'no_show',
-  COMPLET: 'complet'
-};
 
 export default function RegisterForm() {
   const [formData, setFormData] = useState({

@@ -7,9 +7,20 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const AUTH_JWT_SECRET = Deno.env.get("AUTH_JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET") || Deno.env.get("JWT_SECRET");
 const TOKEN_TTL_SECONDS = 8 * 60 * 60;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+const ALLOWED_ORIGINS = [
+  "https://profx-mentori.web.app",
+  "https://profx-mentori.firebaseapp.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
 };
 
 const supabaseRestHeaders = {
@@ -48,6 +59,8 @@ const signHs256Jwt = async (payload: Record<string, unknown>, secret: string) =>
 };
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -149,12 +162,7 @@ serve(async (req) => {
       }
 
       const storedPassword = fallbackUser.password || "";
-      const isBcryptHash = /^\$2[aby]\$/.test(storedPassword);
-      const passwordOk = isBcryptHash
-        ? bcrypt.compareSync(password, storedPassword)
-        : storedPassword === password;
-
-      if (!passwordOk) {
+      if (!storedPassword || !(/^\$2[aby]\$/.test(storedPassword)) || !bcrypt.compareSync(password, storedPassword)) {
         return new Response(
           JSON.stringify({ error: "Invalid username or password" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }

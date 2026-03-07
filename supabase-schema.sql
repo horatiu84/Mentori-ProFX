@@ -16,9 +16,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Insert default admin user
+-- Insert default admin user (bcrypt-hashed password)
+-- IMPORTANT: Change this password immediately after first login!
 INSERT INTO users (username, password, role, "mentorId") VALUES
-  ('admin', 'admin', 'admin', NULL)
+  ('admin', extensions.crypt('admin', extensions.gen_salt('bf', 12)), 'admin', NULL)
 ON CONFLICT (username) DO NOTHING;
 
 -- ==================== MENTORI ====================
@@ -127,13 +128,14 @@ CREATE INDEX IF NOT EXISTS idx_alocari_mentor ON alocari("mentorId");
 CREATE INDEX IF NOT EXISTS idx_studenti_class ON studenti("classId");
 
 -- ==================== INSERT DEFAULT MENTOR USERS ====================
--- (Acesti useri se folosesc pentru login)
+-- (Acesti useri se folosesc pentru login — bcrypt-hashed passwords)
+-- IMPORTANT: Change these passwords immediately after first login!
 INSERT INTO users (username, password, role, "mentorId") VALUES
-  ('Sergiu', 'Sergiu', 'mentor', 'sergiu'),
-  ('Dan', 'Dan', 'mentor', 'dan'),
-  ('Tudor', 'Tudor', 'mentor', 'tudor'),
-  ('Eli', 'Eli', 'mentor', 'eli'),
-  ('Adrian', 'Adrian', 'mentor', 'adrian')
+  ('Sergiu', extensions.crypt('Sergiu', extensions.gen_salt('bf', 12)), 'mentor', 'sergiu'),
+  ('Dan', extensions.crypt('Dan', extensions.gen_salt('bf', 12)), 'mentor', 'dan'),
+  ('Tudor', extensions.crypt('Tudor', extensions.gen_salt('bf', 12)), 'mentor', 'tudor'),
+  ('Eli', extensions.crypt('Eli', extensions.gen_salt('bf', 12)), 'mentor', 'eli'),
+  ('Adrian', extensions.crypt('Adrian', extensions.gen_salt('bf', 12)), 'mentor', 'adrian')
 ON CONFLICT (username) DO NOTHING;
 
 -- ==================== THREE-SESSION PROGRAM COLUMNS ====================
@@ -143,3 +145,6 @@ ALTER TABLE leaduri ADD COLUMN IF NOT EXISTS prezenta2 BOOLEAN DEFAULT NULL;
 ALTER TABLE leaduri ADD COLUMN IF NOT EXISTS prezenta3 BOOLEAN DEFAULT NULL;
 ALTER TABLE mentori ADD COLUMN IF NOT EXISTS "webinar2Date" TIMESTAMPTZ;
 ALTER TABLE mentori ADD COLUMN IF NOT EXISTS "webinar3Date" TIMESTAMPTZ;
+
+-- Column used for lead timeout tracking
+ALTER TABLE leaduri ADD COLUMN IF NOT EXISTS "dataExpirare" TIMESTAMPTZ;

@@ -1,10 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../supabase';
 import { Card, CardContent } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { sanitizeUsername, containsSuspiciousContent } from '../utils/sanitize';
-import { saveAuthSession, saveLegacySession } from '../utils/auth';
+import { saveAuthSession } from '../utils/auth';
 import logo from '../logo2.png';
 
 // Rate limiting: maxim 5 încercări, apoi lockout 30 secunde
@@ -76,59 +75,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // FAST PATH: authenticate directly via DB RPC (avoids slow edge cold starts)
-      const { data: fastAuthRows, error: fastAuthError } = await supabase.rpc('auth_login', {
-        p_username: sanitizedUsername,
-        p_password: password
-      });
-
-      const fastUser = Array.isArray(fastAuthRows) && fastAuthRows.length > 0 ? fastAuthRows[0] : null;
-
-      if (fastAuthError) {
-        console.warn('Fast auth RPC failed, fallback to edge authenticate:', fastAuthError.message);
-      }
-
-      if (fastUser) {
-        const userData = {
-          username: fastUser.username,
-          role: fastUser.role,
-          mentorId: fastUser.mentorId || '',
-          id: fastUser.id,
-        };
-
-        const supabaseUrlFast = import.meta.env.VITE_SUPABASE_URL;
-        const tokenResponse = await authenticateWithTimeout(
-          supabaseUrlFast,
-          { username: sanitizedUsername, password },
-          AUTH_REQUEST_TIMEOUT_MS
-        );
-
-        let tokenResult = {};
-        try {
-          tokenResult = await tokenResponse.json();
-        } catch {
-          tokenResult = { error: 'Răspuns invalid de la server' };
-        }
-
-        if (!tokenResponse.ok || !tokenResult?.accessToken) {
-          if (userData.role === 'admin') {
-            setError('Autentificarea admin necesită token valid. Te rugăm încearcă din nou.');
-            return;
-          }
-          saveLegacySession(userData);
-        } else {
-          saveAuthSession(tokenResult.accessToken, userData);
-        }
-
-        attemptCount.current = 0;
-
-        setLoading(false);
-        navigate('/admin');
-        return;
-      }
-
-      // FALLBACK: edge authenticate
-      // Call authentication Edge Function (secure - doesn't expose users table)
+      // Authenticate via Edge Function (secure - doesn't expose users table)
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       const payload = { username: sanitizedUsername, password };
 

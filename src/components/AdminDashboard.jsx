@@ -23,7 +23,7 @@ export default function AdminDashboard({
   alocaLeaduriAutomata, canAllocateLeads, stergeLeaduri, exportToExcel,
   alocaLeaduriManual, showManualAllocModal, setShowManualAllocModal,
   manualAllocMentor, setManualAllocMentor, manualAllocCount, setManualAllocCount,
-  dezalocaLeaduriMentor, dezalocaLeadSingular, stergeLaeduriMentor,
+  dezalocaLeaduriMentor, dezalocaLeadSingular, stergeLeaduriMentor,
   selectedMentor, setSelectedMentor,
   // Upload
   showUploadForm, setShowUploadForm, uploadMode, setUploadMode,

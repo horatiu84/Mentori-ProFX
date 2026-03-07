@@ -10,15 +10,29 @@ const AUTH_JWT_SECRET =
   Deno.env.get("SUPABASE_JWT_SECRET") ||
   Deno.env.get("JWT_SECRET");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+const ALLOWED_ORIGINS = [
+  "https://profx-mentori.web.app",
+  "https://profx-mentori.netlify.app",
+  "https://profx-mentori.firebaseapp.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
 };
 
 const normalizeUsername = (value: string) => value.replace(/\s+/g, " ").trim();
 const usernameRegex = /^[\p{L}\p{N}._\-\s]+$/u;
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -119,9 +133,9 @@ serve(async (req) => {
       );
     }
 
-    if (newPassword.length < 4 || newPassword.length > 128) {
+    if (newPassword.length < 8 || newPassword.length > 128) {
       return new Response(
-        JSON.stringify({ error: "New password must be between 4 and 128 characters" }),
+        JSON.stringify({ error: "New password must be between 8 and 128 characters" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -142,12 +156,7 @@ serve(async (req) => {
     }
 
     const storedPassword = user.password || "";
-    const isBcryptHash = /^\$2[aby]\$/.test(storedPassword);
-    const oldPasswordOk = isBcryptHash
-      ? bcrypt.compareSync(oldPassword, storedPassword)
-      : storedPassword === oldPassword;
-
-    if (!oldPasswordOk) {
+    if (!storedPassword || !(/^\$2[aby]\$/.test(storedPassword)) || !bcrypt.compareSync(oldPassword, storedPassword)) {
       return new Response(
         JSON.stringify({ error: "Old password is incorrect" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

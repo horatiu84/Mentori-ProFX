@@ -1,14 +1,27 @@
 /* eslint-disable no-undef */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { jwtVerify } from "https://esm.sh/jose@5.9.6";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const AUTH_JWT_SECRET = Deno.env.get("AUTH_JWT_SECRET") || Deno.env.get("SUPABASE_JWT_SECRET") || Deno.env.get("JWT_SECRET");
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+const ALLOWED_ORIGINS = [
+  "https://profx-mentori.web.app",
+  "https://profx-mentori.firebaseapp.com",
+  "http://localhost:5173",
+  "http://localhost:4173",
+];
+
+const getCorsHeaders = (req: Request) => {
+  const origin = req.headers.get("origin") || "";
+  const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  };
 };
 
 // Zoom links per mentor
@@ -21,12 +34,53 @@ const ZOOM_LINKS: Record<string, string> = {
 };
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    // ===== AUTH CHECK =====
+    if (!AUTH_JWT_SECRET) {
+      return new Response(
+        JSON.stringify({ error: "Auth misconfiguration" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const authHeader = req.headers.get("authorization") || "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    let claims: Record<string, unknown> = {};
+    try {
+      const secret = new TextEncoder().encode(AUTH_JWT_SECRET);
+      const { payload } = await jwtVerify(token, secret, {
+        issuer: "profx-webinarii",
+        audience: "authenticated",
+      });
+      claims = payload;
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (claims.app_role !== "admin") {
+      return new Response(
+        JSON.stringify({ error: "Forbidden" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Parse request body
     const { leadId, mentorId } = await req.json();
 
@@ -103,7 +157,8 @@ serve(async (req) => {
 
     // Build confirmation link
     const origin = req.headers.get("origin") || req.headers.get("referer") || "https://profx-mentori.web.app";
-    const confirmationLink = `${origin.replace(/\/$/, "")}/confirm/${lead.id}`;
+    const confirmToken = crypto.randomUUID();
+    const confirmationLink = `${origin.replace(/\/$/, "")}/confirm/${confirmToken}`;
 
     // Replace placeholders in the template
 const replacements: Record<string, string> = {
@@ -215,7 +270,7 @@ const replacements: Record<string, string> = {
         dataTimeout: timeoutDate,
         emailTrimis: true,
         dataTrimiereEmail: now,
-        confirmationToken: lead.id,
+        confirmationToken: confirmToken,
       })
       .eq("id", lead.id);
 

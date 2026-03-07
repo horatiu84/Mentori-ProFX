@@ -7,7 +7,7 @@ import { formatDate, MENTORI_DISPONIBILI, MENTOR_PHOTOS, LEAD_STATUS, ONE_TO_TWE
 import AdminDashboard from "./components/AdminDashboard";
 import MentorDashboard from "./components/MentorDashboard";
 import { clearStoredAuth, getAuthUserFromToken, isTokenValid } from "./utils/auth";
-import { sanitizeEmail } from "./utils/sanitize";
+import { sanitizeEmail, sanitizeText, sanitizePhone } from "./utils/sanitize";
 // ExcelJS se încarcă lazy doar când e nevoie (import/export)
 
 export default function Mentori1La20() {
@@ -225,16 +225,14 @@ export default function Mentori1La20() {
       
       const { data: toateLeadurile } = await supabase.from("leaduri").select("*");
       
+      // Collect all updates needed, then batch
+      const updates = [];
       for (const mentor of mentoriList) {
-        // Numărăm doar leadurile ACTIVE (nu cele finale/terminate)
         const leaduriActive = (toateLeadurile || []).filter(l =>
           l.mentorAlocat === mentor.id && ACTIVE_PROGRAM_STATUSES.includes(l.status)
         );
         const leaduriRealeMentor = leaduriActive.length;
         const isManuallyDisabled = mentor.manuallyDisabled === true;
-        // Mentorul e busy dacă:
-        // - are lead confirmat/neconfirmat/in_program (post-email prin definiție), SAU
-        // - are lead alocat cu emailTrimis: true (emails au fost trimise)
         const hasProgramActiv = (toateLeadurile || []).some(l =>
           l.mentorAlocat === mentor.id && (
             [LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM].includes(l.status) ||
@@ -244,15 +242,20 @@ export default function Mentori1La20() {
         const shouldBeAvailable = !isManuallyDisabled && !hasProgramActiv && leaduriRealeMentor < 30;
         
         if (mentor.available !== shouldBeAvailable || (mentor.leaduriAlocate || 0) !== leaduriRealeMentor) {
-          await supabase.from("mentori").update({
-            leaduriAlocate: leaduriRealeMentor,
-            available: shouldBeAvailable
-          }).eq("id", mentor.id);
+          updates.push({ id: mentor.id, leaduriAlocate: leaduriRealeMentor, available: shouldBeAvailable });
         }
       }
       
-      const { data: updatedMentori } = await supabase.from("mentori").select("*");
-      setMentoriData(updatedMentori || []);
+      // Apply updates in parallel
+      if (updates.length > 0) {
+        await Promise.all(updates.map(u => 
+          supabase.from("mentori").update({ leaduriAlocate: u.leaduriAlocate, available: u.available }).eq("id", u.id)
+        ));
+        const { data: updatedMentori } = await supabase.from("mentori").select("*");
+        setMentoriData(updatedMentori || []);
+      } else {
+        setMentoriData(mentoriList);
+      }
     } catch (err) { console.error("Eroare fetch mentori:", err); }
   };
 
@@ -278,16 +281,13 @@ export default function Mentori1La20() {
       const { data: list, error: fetchErr } = await supabase
         .from("leaduri").select("*").order("createdAt", { ascending: false });
       if (fetchErr) throw fetchErr;
-      let expired = 0;
-      for (const lead of (list || [])) {
-        if (checkLeadTimeout(lead)) {
-          expired++;
-          await supabase.from("leaduri").update({
-            status: LEAD_STATUS.NECONFIRMAT, motivNeconfirmare: 'Timeout 6h', dataExpirare: new Date().toISOString()
-          }).eq("id", lead.id);
-        }
-      }
-      if (expired > 0) {
+      
+      // Batch-update all expired leads in one query
+      const expiredIds = (list || []).filter(lead => checkLeadTimeout(lead)).map(l => l.id);
+      if (expiredIds.length > 0) {
+        await supabase.from("leaduri").update({
+          status: LEAD_STATUS.NECONFIRMAT, motivNeconfirmare: 'Timeout 6h', dataExpirare: new Date().toISOString()
+        }).in("id", expiredIds);
         const { data: list2 } = await supabase
           .from("leaduri").select("*").order("createdAt", { ascending: false });
         setLeaduri(list2 || []);
@@ -302,26 +302,34 @@ export default function Mentori1La20() {
       
       const { data: toateLeadurile } = await supabase.from("leaduri").select("*");
       
+      const toDelete = [];
+      const toUpdate = [];
+      
       for (const alocare of (alocariList || [])) {
         const leaduriReale = (toateLeadurile || []).filter(l => 
           alocare.leaduri && alocare.leaduri.includes(l.id) && !isFinalizedProgramLead(l)
         );
-        
         const numarRealDeLeaduri = leaduriReale.length;
         
-        if (alocare.numarLeaduri !== numarRealDeLeaduri || alocare.leaduri.length !== numarRealDeLeaduri) {
-          const leaduriIdReale = leaduriReale.map(l => l.id);
-          await supabase.from("alocari").update({
-            numarLeaduri: numarRealDeLeaduri,
-            leaduri: leaduriIdReale,
-            ultimaActualizare: new Date().toISOString()
-          }).eq("id", alocare.id);
-        }
-        
         if (numarRealDeLeaduri === 0) {
-          await supabase.from("alocari").delete().eq("id", alocare.id);
+          toDelete.push(alocare.id);
+        } else if (alocare.numarLeaduri !== numarRealDeLeaduri || alocare.leaduri.length !== numarRealDeLeaduri) {
+          toUpdate.push({
+            id: alocare.id,
+            numarLeaduri: numarRealDeLeaduri,
+            leaduri: leaduriReale.map(l => l.id),
+            ultimaActualizare: new Date().toISOString()
+          });
         }
       }
+      
+      // Batch deletes and updates
+      const ops = [];
+      if (toDelete.length > 0) ops.push(supabase.from("alocari").delete().in("id", toDelete));
+      for (const u of toUpdate) {
+        ops.push(supabase.from("alocari").update({ numarLeaduri: u.numarLeaduri, leaduri: u.leaduri, ultimaActualizare: u.ultimaActualizare }).eq("id", u.id));
+      }
+      if (ops.length > 0) await Promise.all(ops);
       
       const { data: alocariUpdated } = await supabase.from("alocari").select("*");
       setAlocariActive(alocariUpdated || []);
@@ -806,6 +814,9 @@ Echipa ProFX`,
   }, [leaduri, mentoriData, alocariActive]);
 
   // ==================== EFFECTS ====================
+  useEffect(() => { setCurrentPage(1); }, [searchQuery]);
+  useEffect(() => { setMentorCurrentPage(1); }, [mentorSearchQuery]);
+
   useEffect(() => {
     const token = localStorage.getItem('authToken');
     const validToken = isTokenValid(token);
@@ -819,24 +830,8 @@ Echipa ProFX`,
       return;
     }
 
-    const legacyAuth = localStorage.getItem('isAuthenticated') === 'true';
-    const legacyUser = localStorage.getItem('currentUser') || '';
-    const legacyRole = localStorage.getItem('currentRole') || '';
-
-    if (legacyAuth && legacyUser && legacyRole) {
-      if (legacyRole === 'admin') {
-        clearStoredAuth();
-        navigate('/login');
-        return;
-      }
-      setIsAuthenticated(true);
-      setCurrentMentor(legacyUser);
-      setCurrentRole(legacyRole);
-      setCurrentMentorId(localStorage.getItem('currentMentorId') || null);
-      return;
-    }
-
     clearStoredAuth();
+    navigate('/login');
   }, [navigate]);
 
   useEffect(() => {
@@ -957,7 +952,7 @@ Echipa ProFX`,
       await ensureLeadEmailIsUnique(normalizedEmail);
 
       const { error: insErr } = await supabase.from("leaduri").insert({
-        nume: manualLead.nume.trim(), telefon: manualLead.telefon.trim(), email: normalizedEmail,
+        nume: sanitizeText(manualLead.nume), telefon: sanitizePhone(manualLead.telefon), email: normalizedEmail,
         status: LEAD_STATUS.NEALOCAT, mentorAlocat: null, dataAlocare: null, dataConfirmare: null,
         dataTimeout: null, statusOneToTwenty: ONE_TO_TWENTY_STATUS.PENDING, dataOneToTwenty: null,
         numarReAlocari: 0, istoricMentori: [], createdAt: new Date().toISOString()
@@ -1289,7 +1284,7 @@ Echipa ProFX`,
       return null;
     }
 
-    const confirmationLink = `${window.location.origin}/confirm/${lead.id}`;
+    const confirmationLink = `${window.location.origin}/confirm/${lead.confirmationToken || lead.id}`;
 
     // Înlocuim placeholder-urile cu datele reale
     const replacements = {
@@ -1307,8 +1302,9 @@ Echipa ProFX`,
     // Înlocuim toate placeholder-urile
     Object.keys(replacements).forEach(placeholder => {
       const value = replacements[placeholder];
-      subject = subject.replace(new RegExp(placeholder, 'g'), value);
-      body = body.replace(new RegExp(placeholder, 'g'), value);
+      const escaped = placeholder.replace(/[{}]/g, '\\$&');
+      subject = subject.replace(new RegExp(escaped, 'g'), value);
+      body = body.replace(new RegExp(escaped, 'g'), value);
     });
 
     return { subject, body };
@@ -1586,7 +1582,7 @@ Echipa ProFX`,
   };
 
   const handleNoShowLead = async (leadId) => {
-    showConfirmDialog('No-Show Sesiune 1', 'Marcheaзă leadul ca NO-SHOW la Sesiunea 1?', async () => {
+    showConfirmDialog('No-Show Sesiune 1', 'Marchează leadul ca NO-SHOW la Sesiunea 1?', async () => {
       setLoading(true);
       try {
         await supabase.from('leaduri').update({
@@ -1600,7 +1596,7 @@ Echipa ProFX`,
   };
 
   const handleCompleteLead = async (leadId) => {
-    showConfirmDialog('Prezent Sesiune 1', 'Marcheaзă leadul ca PREZENT la Sesiunea 1?', async () => {
+    showConfirmDialog('Prezent Sesiune 1', 'Marchează leadul ca PREZENT la Sesiunea 1?', async () => {
       setLoading(true);
       try {
         await supabase.from('leaduri').update({
@@ -1674,7 +1670,7 @@ Echipa ProFX`,
   };
 
   const handleSession2Prezent = async (leadId) => {
-    showConfirmDialog('Prezent Sesiune 2', 'Marcheaзă leadul ca PREZENT la Sesiunea 2?', async () => {
+    showConfirmDialog('Prezent Sesiune 2', 'Marchează leadul ca PREZENT la Sesiunea 2?', async () => {
       setLoading(true);
       try {
         await supabase.from('leaduri').update({
@@ -1688,7 +1684,7 @@ Echipa ProFX`,
   };
 
   const handleSession2NoShow = async (leadId) => {
-    showConfirmDialog('No-Show Sesiune 2', 'Marcheaзă leadul ca NO-SHOW la Sesiunea 2?', async () => {
+    showConfirmDialog('No-Show Sesiune 2', 'Marchează leadul ca NO-SHOW la Sesiunea 2?', async () => {
       setLoading(true);
       try {
         await supabase.from('leaduri').update({
@@ -1703,7 +1699,7 @@ Echipa ProFX`,
   };
 
   const handleSession3Prezent = async (leadId) => {
-    showConfirmDialog('Prezent Sesiune 3', 'Marcheaзă leadul ca PREZENT la Sesiunea 3? Aceasta finalizează programul.', async () => {
+    showConfirmDialog('Prezent Sesiune 3', 'Marchează leadul ca PREZENT la Sesiunea 3? Aceasta finalizează programul.', async () => {
       setLoading(true);
       try {
         const lead = leaduri.find(l => l.id === leadId);
@@ -1720,7 +1716,7 @@ Echipa ProFX`,
   };
 
   const handleSession3NoShow = async (leadId) => {
-    showConfirmDialog('No-Show Sesiune 3', 'Marcheaзă leadul ca NO-SHOW la Sesiunea 3? Aceasta finalizează programul.', async () => {
+    showConfirmDialog('No-Show Sesiune 3', 'Marchează leadul ca NO-SHOW la Sesiunea 3? Aceasta finalizează programul.', async () => {
       setLoading(true);
       try {
         const lead = leaduri.find(l => l.id === leadId);
@@ -1793,6 +1789,7 @@ Echipa ProFX`,
         }).sort((a, b) => a.ordineCoada - b.ordineCoada);
         if (mentDisp.length === 0) { setError("Nu exista mentori disponibili"); setLoading(false); return; }
         const mentorNou = mentDisp[0];
+        const oldMentorId = lead.mentorAlocat;
         const da = new Date().toISOString();
         await supabase.from("leaduri").update({
           status: LEAD_STATUS.ALOCAT, 
@@ -1804,6 +1801,17 @@ Echipa ProFX`,
           istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
           emailTrimis: false
         }).eq("id", leadId);
+        // Decrement old mentor's count
+        if (oldMentorId) {
+          const oldMentor = mentoriData.find(m => m.id === oldMentorId);
+          if (oldMentor) {
+            await supabase.from("mentori").update({ leaduriAlocate: Math.max(0, (oldMentor.leaduriAlocate || 1) - 1) }).eq("id", oldMentorId);
+          }
+          // Clean up old allocation record
+          if (lead.alocareId) {
+            await supabase.from("alocari").delete().eq("id", lead.alocareId);
+          }
+        }
         await supabase.from("mentori").update({ leaduriAlocate: (mentorNou.leaduriAlocate || 0) + 1 }).eq("id", mentorNou.id);
         await fetchAllData(); setSuccess('Lead re-alocat catre ' + mentorNou.nume + '!');
       } catch (err) { setError("Eroare la re-alocarea leadului"); } finally { setLoading(false); }
@@ -1822,7 +1830,7 @@ Echipa ProFX`,
     });
   };
 
-  const stergeLaeduriMentor = (alocare) => {
+  const stergeLeaduriMentor = (alocare) => {
     showConfirmDialog("Stergere Leaduri Mentor", 'Stergi toate cele ' + alocare.numarLeaduri + ' leaduri ale mentorului ' + alocare.mentorNume + '?', async () => {
       setLoading(true);
       try {
@@ -2010,7 +2018,7 @@ Echipa ProFX`,
       const normalizedEmail = normalizeLeadEmail(editLeadData.email);
       await ensureLeadEmailIsUnique(normalizedEmail, { excludeLeadId: leadId });
 
-      const updatePayload = { nume: editLeadData.nume.trim(), telefon: editLeadData.telefon.trim(), email: normalizedEmail };
+      const updatePayload = { nume: sanitizeText(editLeadData.nume), telefon: sanitizePhone(editLeadData.telefon), email: normalizedEmail };
       if (editLeadData.status) updatePayload.status = editLeadData.status;
 
       if (updatePayload.status && isFinalizedProgramLead({ status: updatePayload.status })) {
@@ -2214,7 +2222,7 @@ Echipa ProFX`,
         manualAllocMentor={manualAllocMentor} setManualAllocMentor={setManualAllocMentor}
         manualAllocCount={manualAllocCount} setManualAllocCount={setManualAllocCount}
         stergeLeaduri={stergeLeaduri} exportToExcel={exportToExcel}
-        dezalocaLeaduriMentor={dezalocaLeaduriMentor} dezalocaLeadSingular={dezalocaLeadSingular} stergeLaeduriMentor={stergeLaeduriMentor}
+        dezalocaLeaduriMentor={dezalocaLeaduriMentor} dezalocaLeadSingular={dezalocaLeadSingular} stergeLeaduriMentor={stergeLeaduriMentor}
         selectedMentor={selectedMentor} setSelectedMentor={setSelectedMentor}
         showUploadForm={showUploadForm} setShowUploadForm={setShowUploadForm}
         uploadMode={uploadMode} setUploadMode={setUploadMode}
