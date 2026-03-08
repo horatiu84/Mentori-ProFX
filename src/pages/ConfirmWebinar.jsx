@@ -14,6 +14,14 @@ const ZOOM_LINKS = {
   adrian: null,
 };
 
+const WHATSAPP_LINKS = {
+  sergiu: { url: 'https://chat.whatsapp.com/KLypDNszyMxG3cV7AOi2V4?mode=gi_t', label: 'Grup WhatsApp Sergiu' },
+  eli: { url: 'https://chat.whatsapp.com/LYeJe6QzKa4BTG85jtrJFn?mode=gi_t', label: 'Grup WhatsApp Eli' },
+  tudor: { url: 'https://chat.whatsapp.com/Jcprhvry0HI3aekfwhbcRn?mode=gi_t', label: 'Grup WhatsApp Tudor' },
+  dan: { url: 'https://chat.whatsapp.com/BjxtdGbsfpHK0T30dDz25Y?mode=gi_t', label: 'Grup WhatsApp Dan' },
+  adrian: { url: 'https://chat.whatsapp.com/CFq1ml7nzAl22ESUHPyM9N?mode=gi_t', label: 'Grup WhatsApp Adrian' },
+};
+
 export default function ConfirmWebinar() {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -21,6 +29,78 @@ export default function ConfirmWebinar() {
   const [status, setStatus] = useState('loading'); // loading, success, error, already-confirmed, expired, invalid
   const [leadData, setLeadData] = useState(null);
   const [error, setError] = useState('');
+
+  const renderMentorAccessDetails = (mentorId, options = {}) => {
+    const zoom = ZOOM_LINKS[mentorId];
+    const whatsapp = WHATSAPP_LINKS[mentorId];
+    const warningText = options.repeatAccessWarning
+      ? '⚠️ IMPORTANT: Salvează linkul de Zoom, parola și grupul de WhatsApp acum!'
+      : '⚠️ IMPORTANT: Salvează linkul de Zoom, parola și grupul de WhatsApp!';
+    const warningSubtext = options.repeatAccessWarning
+      ? 'Vei avea nevoie de ele pentru a intra la webinar și pentru comunicarea cu mentorul.'
+      : null;
+
+    if (!zoom && !whatsapp) {
+      return (
+        <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
+          <p className="text-yellow-300 text-sm">ℹ️ Detaliile de acces vor fi comunicate în curând de mentorul tău.</p>
+        </div>
+      );
+    }
+
+    return (
+      <>
+        <div className="bg-yellow-500/20 border-2 border-yellow-400/70 rounded-xl p-5 mb-4">
+          <p className="text-yellow-300 text-xl font-bold text-center">
+            {warningText}
+          </p>
+          {warningSubtext && (
+            <p className="text-yellow-200 text-sm text-center mt-2">
+              {warningSubtext}
+            </p>
+          )}
+        </div>
+        {zoom ? (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mb-4 text-left">
+            <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
+            <a
+              href={zoom.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
+            >
+              {zoom.url}
+            </a>
+            <p className="text-gray-400 text-sm text-center">
+              Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
+              &nbsp;&nbsp;|&nbsp;&nbsp;
+              Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
+            </p>
+          </div>
+        ) : (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-4">
+            <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
+          </div>
+        )}
+        {whatsapp && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-5 mb-6 text-left">
+            <p className="text-emerald-300 font-semibold mb-3 text-center">💬 Grup WhatsApp Mentor</p>
+            <a
+              href={whatsapp.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-center text-emerald-300 underline font-medium text-lg mb-3 break-all hover:text-emerald-200"
+            >
+              {whatsapp.label}
+            </a>
+            <p className="text-gray-400 text-sm text-center">
+              Intră în grup pentru update-uri, detalii și întrebări despre sesiunea mentorului tău.
+            </p>
+          </div>
+        )}
+      </>
+    );
+  };
 
   useEffect(() => {
     const confirmParticipation = async () => {
@@ -128,38 +208,7 @@ export default function ConfirmWebinar() {
               <p className="text-gray-300 text-lg mb-6">
                 Mulțumim, {leadData?.nume}! Participarea ta la webinarul 1:20 ProFX a fost confirmată cu succes.
               </p>
-              {(() => {
-                const zoom = ZOOM_LINKS[leadData?.mentorAlocat];
-                return zoom ? (
-                  <>
-                    <div className="bg-yellow-500/20 border-2 border-yellow-400/70 rounded-xl p-5 mb-4">
-                      <p className="text-yellow-300 text-xl font-bold text-center">
-                        ⚠️ IMPORTANT: Salvează linkul de Zoom și parola!
-                      </p>
-                    </div>
-                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 mb-6 text-left">
-                      <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
-                      <a
-                        href={zoom.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
-                      >
-                        {zoom.url}
-                      </a>
-                      <p className="text-gray-400 text-sm text-center">
-                        Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
-                        &nbsp;&nbsp;|&nbsp;&nbsp;
-                        Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
-                    <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
-                  </div>
-                );
-              })()}
+              {renderMentorAccessDetails(leadData?.mentorAlocat)}
               <p className="text-gray-400 text-sm">
                 Te așteptăm cu drag la webinar! 🚀
               </p>
@@ -203,41 +252,7 @@ export default function ConfirmWebinar() {
                   Nu este nevoie să confirmi din nou. Te așteptăm la webinar! 🎯
                 </p>
               </div>
-              {(() => {
-                const zoom = ZOOM_LINKS[leadData?.mentorAlocat];
-                return zoom ? (
-                  <>
-                    <div className="bg-yellow-500/20 border-2 border-yellow-400/70 rounded-xl p-5 mb-4">
-                      <p className="text-yellow-300 text-xl font-bold text-center">
-                        ⚠️ IMPORTANT: Salvează linkul de Zoom și parola acum!
-                      </p>
-                      <p className="text-yellow-200 text-sm text-center mt-2">
-                        Fără link și parolă nu vei putea intra în webinar!
-                      </p>
-                    </div>
-                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-5 text-left">
-                      <p className="text-green-300 font-semibold mb-3 text-center">🔗 Link Zoom Webinar</p>
-                      <a
-                        href={zoom.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block text-center text-blue-400 underline font-medium text-lg mb-3 break-all hover:text-blue-300"
-                      >
-                        {zoom.url}
-                      </a>
-                      <p className="text-gray-400 text-sm text-center">
-                        Meeting ID: <span className="text-white font-mono">{zoom.meetingId}</span>
-                        &nbsp;&nbsp;|&nbsp;&nbsp;
-                        Passcode: <span className="text-white font-mono">{zoom.passcode}</span>
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
-                    <p className="text-yellow-300 text-sm">ℹ️ Linkul Zoom va fi comunicat în curând de mentorul tău.</p>
-                  </div>
-                );
-              })()}
+              {renderMentorAccessDetails(leadData?.mentorAlocat, { repeatAccessWarning: true })}
             </div>
           )}
 
@@ -258,7 +273,7 @@ export default function ConfirmWebinar() {
                   Dacă ai primit acest link prin email și întâmpini probleme, te rugăm să contactezi mentorul tău.
                 </p>
                 <p className="text-gray-500 text-xs">
-                  Pentru asistență: support@profx.ro
+                  Pentru asistență: <a href="https://t.me/ProFX_Community" className="text-blue-400 underline">https://t.me/ProFX_Community</a>
                 </p>
               </div>
             </div>
