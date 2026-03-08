@@ -4,6 +4,8 @@
 
 1. **send-email** - Trimite un email către un singur lead
 2. **send-bulk-emails** - Trimite emailuri în masă către toți leadurile unui mentor
+3. **delete-leads** - Șterge leaduri din panoul de admin prin service role (single, toate, sau per mentor)
+4. **update-mentor-schedule** - Setează sau resetează sesiunile webinar 1:20 pentru admin sau mentorul propriu
 
 ## Instalare Supabase CLI
 
@@ -49,9 +51,11 @@ npx supabase secrets set RESEND_API_KEY=re_xxxxxxxxxx
 ### 4. Deploy funcțiile
 
 ```bash
-# Deploy ambele funcții
+# Deploy funcțiile principale
 npx supabase functions deploy send-email
 npx supabase functions deploy send-bulk-emails
+npx supabase functions deploy delete-leads --no-verify-jwt
+npx supabase functions deploy update-mentor-schedule --no-verify-jwt
 
 # Sau deploy toate dintr-o dată
 npx supabase functions deploy
@@ -73,6 +77,8 @@ npx supabase functions serve send-bulk-emails
 După deploy, funcțiile vor fi disponibile la:
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/send-email`
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/send-bulk-emails`
+- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/delete-leads`
+- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-mentor-schedule`
 
 Aplicația React deja folosește aceste URL-uri, așa că nu mai trebuie modificat nimic în cod! 🎉
 
@@ -82,6 +88,8 @@ Aplicația React deja folosește aceste URL-uri, așa că nu mai trebuie modific
 # Vezi logs-urile funcțiilor
 npx supabase functions insights send-email
 npx supabase functions insights send-bulk-emails
+npx supabase functions insights delete-leads
+npx supabase functions insights update-mentor-schedule
 ```
 
 Sau direct în Supabase Dashboard:
@@ -98,6 +106,10 @@ supabase/
     │   └── index.js
     └── send-bulk-emails/
         └── index.js
+    └── delete-leads/
+        └── index.ts
+    └── update-mentor-schedule/
+        └── index.ts
 ```
 
 ## Variabile de mediu necesare în Supabase

@@ -147,3 +147,9 @@ verify_jwt = false
 
 [functions.manage-users]
 verify_jwt = false
+
+[functions.delete-leads]
+verify_jwt = false
+
+[functions.update-mentor-schedule]
+verify_jwt = false

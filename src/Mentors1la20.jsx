@@ -67,6 +67,8 @@ export default function Mentori1La20() {
 
   const COMPLETED_3_SESSIONS_HIDE_MS = 60 * 60 * 1000;
   const ACCOUNTS_REQUEST_TIMEOUT_MS = 12000;
+  const DELETE_REQUEST_TIMEOUT_MS = 30000;
+  const SCHEDULE_REQUEST_TIMEOUT_MS = 30000;
   const ACCOUNTS_REQUEST_MAX_RETRIES = 1;
   const ACCOUNTS_CACHE_KEY = 'adminUsersAccountsCacheV1';
   const ACCOUNTS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -596,6 +598,56 @@ Echipa ProFX`,
     } finally {
       setLoading(false);
     }
+  };
+
+  const deleteLeadsAsAdmin = async (payload) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !isTokenValid(token)) {
+      throw new Error('Sesiune invalidă. Reautentifică-te.');
+    }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/delete-leads`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    }, DELETE_REQUEST_TIMEOUT_MS);
+
+    const result = await parseJsonResponse(response);
+    if (!response.ok) {
+      const errorParts = [result.error, result.details, `HTTP ${response.status}`].filter(Boolean);
+      throw new Error(errorParts.join(': ') || 'Operațiunea de ștergere a eșuat');
+    }
+
+    return result;
+  };
+
+  const updateMentorSchedule = async ({ mentorId, webinar1Date, webinar2Date, webinar3Date, resetAll = false }) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !isTokenValid(token)) {
+      throw new Error('Sesiune invalidă. Reautentifică-te.');
+    }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/update-mentor-schedule`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ mentorId, webinar1Date, webinar2Date, webinar3Date, resetAll }),
+    }, SCHEDULE_REQUEST_TIMEOUT_MS);
+
+    const result = await parseJsonResponse(response);
+    if (!response.ok) {
+      const errorParts = [result.error, result.details, `HTTP ${response.status}`].filter(Boolean);
+      throw new Error(errorParts.join(': ') || 'Actualizarea programului webinar a eșuat');
+    }
+
+    return result;
   };
 
   // ==================== AUTO-ALLOCATE ====================
@@ -1230,29 +1282,39 @@ Echipa ProFX`,
 
     setLoading(true);
     setError('');
+    setSuccess('');
     try {
-      const updates = resetAll
-        ? {
-            ultimulOneToTwenty: null,
-            webinar2Date: null,
-            webinar3Date: null,
-          }
-        : {
-            ultimulOneToTwenty: new Date(customDate).toISOString(),
-            webinar2Date: customDate2 ? new Date(customDate2).toISOString() : null,
-            webinar3Date: customDate3 ? new Date(customDate3).toISOString() : null,
-          };
+      const result = await updateMentorSchedule({
+        mentorId,
+        webinar1Date: resetAll ? null : customDate,
+        webinar2Date: resetAll ? null : customDate2,
+        webinar3Date: resetAll ? null : customDate3,
+        resetAll,
+      });
 
-      const { error: updateErr } = await supabase.from('mentori').update(updates).eq('id', mentorId);
-      if (updateErr) throw updateErr;
+      const mentorActualizat = result.mentor;
+      if (!mentorActualizat?.id) {
+        throw new Error('Mentorul nu a putut fi actualizat.');
+      }
 
-      await fetchMentori();
-      setSuccess(resetAll ? 'Programul webinar 1:20 a fost resetat.' : 'Datele webinarului actualizate!');
+      setMentoriData(prev => {
+        const mentorExista = prev.some(mentor => mentor.id === mentorActualizat.id);
+        const urmatoriiMentori = prev.map(mentor => (
+          mentor.id === mentorActualizat.id
+            ? { ...mentor, ...mentorActualizat }
+            : mentor
+        ));
+
+        return mentorExista ? urmatoriiMentori : [...urmatoriiMentori, mentorActualizat];
+      });
+
+  await fetchMentori();
+  setSuccess(result.message || (resetAll ? 'Programul webinar 1:20 a fost resetat.' : 'Datele webinarului actualizate!'));
       closeDateModal();
       return true;
     } catch (err) {
       console.error('Eroare la actualizarea sesiunilor 1:20:', err);
-      setError('Eroare la actualizarea datei 1:20');
+      setError(err?.message || 'Eroare la actualizarea datei 1:20');
       return false;
     } finally {
       setLoading(false);
@@ -1821,28 +1883,31 @@ Echipa ProFX`,
   const stergeLeaduri = () => {
     showConfirmDialog("Stergere Totala", "Esti sigur ca vrei sa stergi TOATE leadurile?", async () => {
       setLoading(true);
+      setError('');
+      setSuccess('');
       try {
-        await supabase.from("leaduri").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        await supabase.from("alocari").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        for (const m of mentoriData) await supabase.from("mentori").update({ leaduriAlocate: 0, available: true }).eq("id", m.id);
-        await fetchAllData(); setSuccess("Toate leadurile au fost sterse si mentorii resetati!");
-      } catch (err) { setError("Eroare la stergerea leadurilor"); } finally { setLoading(false); }
+        const result = await deleteLeadsAsAdmin({ action: 'delete_all' });
+        await fetchAllData();
+        setSuccess(result.message || "Toate leadurile au fost sterse si mentorii resetati!");
+      } catch (err) {
+        console.error('Eroare la stergerea tuturor leadurilor:', err);
+        setError(err?.message || "Eroare la stergerea leadurilor");
+      } finally { setLoading(false); }
     });
   };
 
   const stergeLeaduriMentor = (alocare) => {
     showConfirmDialog("Stergere Leaduri Mentor", 'Stergi toate cele ' + alocare.numarLeaduri + ' leaduri ale mentorului ' + alocare.mentorNume + '?', async () => {
       setLoading(true);
+      setError('');
+      setSuccess('');
       try {
-        await supabase.from("leaduri").delete().eq("mentorAlocat", alocare.mentorId);
-        await supabase.from("alocari").delete().eq("mentorId", alocare.mentorId);
-        const mentorDB = mentoriData.find(x => x.id === alocare.mentorId);
-        if (mentorDB) await supabase.from("mentori").update({ leaduriAlocate: 0, available: true }).eq("id", alocare.mentorId);
+        const result = await deleteLeadsAsAdmin({ action: 'delete_mentor', mentorId: alocare.mentorId });
         await fetchAllData(); 
-        setSuccess('Leadurile mentorului ' + alocare.mentorNume + ' au fost sterse!');
+        setSuccess(result.message || ('Leadurile mentorului ' + alocare.mentorNume + ' au fost sterse!'));
       } catch (err) { 
         console.error("Eroare la stergerea leadurilor:", err);
-        setError("Eroare la stergerea leadurilor mentorului"); 
+        setError(err?.message || "Eroare la stergerea leadurilor mentorului"); 
       } finally { setLoading(false); }
     });
   };
@@ -2045,22 +2110,16 @@ Echipa ProFX`,
   const handleDeleteLead = (lead) => {
     showConfirmDialog("Stergere Lead", 'Stergi leadul "' + lead.nume + '"?', async () => {
       setLoading(true);
+      setError('');
+      setSuccess('');
       try {
-        await supabase.from("leaduri").delete().eq("id", lead.id);
-        if (lead.mentorAlocat && ACTIVE_PROGRAM_STATUSES.includes(lead.status)) {
-          const m = mentoriData.find(x => x.id === lead.mentorAlocat);
-          if (m) await supabase.from("mentori").update({ leaduriAlocate: Math.max(0, (m.leaduriAlocate || 0) - 1) }).eq("id", lead.mentorAlocat);
-          if (lead.alocareId) {
-            const aloc = alocariActive.find(a => a.id === lead.alocareId);
-            if (aloc) {
-              const rem = aloc.leaduri.filter(id => id !== lead.id);
-              if (rem.length === 0) await supabase.from("alocari").delete().eq("id", lead.alocareId);
-              else await supabase.from("alocari").update({ leaduri: rem, numarLeaduri: rem.length }).eq("id", lead.alocareId);
-            }
-          }
-        }
-        setSuccess('Lead "' + lead.nume + '" sters!'); await fetchAllData();
-      } catch (err) { setError("Eroare la stergerea leadului"); } finally { setLoading(false); }
+        const result = await deleteLeadsAsAdmin({ action: 'delete_single', leadId: lead.id });
+        await fetchAllData();
+        setSuccess(result.message || ('Lead "' + lead.nume + '" sters!'));
+      } catch (err) {
+        console.error('Eroare la stergerea leadului:', err);
+        setError(err?.message || "Eroare la stergerea leadului");
+      } finally { setLoading(false); }
     });
   };
 
