@@ -153,3 +153,9 @@ verify_jwt = false
 
 [functions.update-mentor-schedule]
 verify_jwt = false
+
+[functions.allocate-leads]
+verify_jwt = false
+
+[functions.update-lead-attendance]
+verify_jwt = false

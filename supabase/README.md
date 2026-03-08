@@ -6,6 +6,8 @@
 2. **send-bulk-emails** - Trimite emailuri în masă către toți leadurile unui mentor
 3. **delete-leads** - Șterge leaduri din panoul de admin prin service role (single, toate, sau per mentor)
 4. **update-mentor-schedule** - Setează sau resetează sesiunile webinar 1:20 pentru admin sau mentorul propriu
+5. **allocate-leads** - Alocă manual sau automat leaduri către mentori prin service role
+6. **update-lead-attendance** - Marchează și corectează prezența leadurilor din dashboard-ul mentorului
 
 ## Instalare Supabase CLI
 
@@ -56,6 +58,8 @@ npx supabase functions deploy send-email
 npx supabase functions deploy send-bulk-emails
 npx supabase functions deploy delete-leads --no-verify-jwt
 npx supabase functions deploy update-mentor-schedule --no-verify-jwt
+npx supabase functions deploy allocate-leads --no-verify-jwt
+npx supabase functions deploy update-lead-attendance --no-verify-jwt
 
 # Sau deploy toate dintr-o dată
 npx supabase functions deploy
@@ -79,6 +83,8 @@ După deploy, funcțiile vor fi disponibile la:
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/send-bulk-emails`
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/delete-leads`
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-mentor-schedule`
+- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/allocate-leads`
+- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-lead-attendance`
 
 Aplicația React deja folosește aceste URL-uri, așa că nu mai trebuie modificat nimic în cod! 🎉
 
@@ -90,6 +96,8 @@ npx supabase functions insights send-email
 npx supabase functions insights send-bulk-emails
 npx supabase functions insights delete-leads
 npx supabase functions insights update-mentor-schedule
+npx supabase functions insights allocate-leads
+npx supabase functions insights update-lead-attendance
 ```
 
 Sau direct în Supabase Dashboard:
@@ -109,6 +117,10 @@ supabase/
     └── delete-leads/
         └── index.ts
     └── update-mentor-schedule/
+        └── index.ts
+    └── allocate-leads/
+        └── index.ts
+    └── update-lead-attendance/
         └── index.ts
 ```
 
