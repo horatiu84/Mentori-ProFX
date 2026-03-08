@@ -71,6 +71,8 @@ export default function Mentori1La20() {
   const SCHEDULE_REQUEST_TIMEOUT_MS = 30000;
   const ALLOCATION_REQUEST_TIMEOUT_MS = 30000;
   const ATTENDANCE_REQUEST_TIMEOUT_MS = 30000;
+  const EDIT_LEAD_REQUEST_TIMEOUT_MS = 30000;
+  const TEMPLATE_REQUEST_TIMEOUT_MS = 30000;
   const ACCOUNTS_REQUEST_MAX_RETRIES = 1;
   const ACCOUNTS_CACHE_KEY = 'adminUsersAccountsCacheV1';
   const ACCOUNTS_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -342,59 +344,8 @@ export default function Mentori1La20() {
 
   const fetchEmailTemplate = async () => {
     try {
-      const { data: templateDoc, error: tplErr } = await supabase
-        .from("settings").select("*").eq("id", "emailTemplate").single();
-      
-      if (!tplErr && templateDoc) {
-        setEmailTemplate(templateDoc);
-      } else {
-        // Template default dacă nu există
-        const defaultTemplate = {
-          id: "emailTemplate",
-          subject: "Invitatie Webinar 1:20 - ProFX",
-          body: `Buna ziua {{nume}},
-
-Sunt {{mentorName}}, mentorul tau de la ProFX!
-
-Te invit să participi la webinarul nostru 1:20 dedicat începătorilor, unde vom construi împreună baza corectă în trading, pas cu pas.
-
-În cadrul webinarului vei învăța:
-
-✅ Ce înseamnă tradingul și cum funcționează piața
-✅ Ce sunt Buy Stop/Limit, Sell Stop/Limit, Stop Loss (SL) și Take Profit (TP)
-✅ Cum se folosește platforma MT5 și cum se plasează corect un ordin
-✅ Noțiuni esențiale pentru a începe în siguranță, fără confuzie
-
-Webinarul este gândit special pentru cei care pornesc de la zero și vor să înțeleagă lucrurile simplu și practic.
-
-La final vei putea adresa întrebări și vei avea o imagine clară asupra pașilor următori.
-
-Data si ora webinarului:
-📅 {{webinarDate}}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🎯 CONFIRMA PARTICIPAREA TA:
-👉 {{confirmationLink}}
-
-Te rog să confirmi participarea ta accesând link-ul de mai sus.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-Te astept cu drag!
-
-Cu respect,
-{{mentorName}}
-Mentor ProFX
-
-Contact:
-📞 {{telefon}}
-📧 {{email}}`,
-          createdAt: new Date().toISOString()
-        };
-        await supabase.from("settings").upsert(defaultTemplate);
-        setEmailTemplate(defaultTemplate);
-      }
+      const result = await manageEmailTemplateAsAdmin({ method: 'GET', templateId: 'emailTemplate' });
+      setEmailTemplate(result.template || null);
     } catch (err) { 
       console.error("Eroare fetch email template:", err);
     }
@@ -402,54 +353,8 @@ Contact:
 
   const fetchVipEmailTemplate = async () => {
     try {
-      const { data: templateDoc, error: tplErr } = await supabase
-        .from("settings").select("*").eq("id", "vipEmailTemplate").single();
-      if (!tplErr && templateDoc) {
-        setVipEmailTemplate(templateDoc);
-      } else {
-        const defaultVipTemplate = {
-          id: "vipEmailTemplate",
-          subject: "Ofertă VIP Exclusivă – ProFX Premium 💎",
-          body: `Buna ziua {{nume}},
-
-🎓 Felicitări pentru parcurgerea programului ProFX!
-
-Acum că ai finalizat sesiunile, te invităm să faci următorul pas în cariera ta de trader cu accesul la Programul VIP ProFX — conceput special pentru traders dedicați.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💎 ACCES VIP — DOAR 20€/LUNĂ
-
-Ce primești:
-
-📈 MINIM 4 sesiuni de trading LIVE zilnic
-   • Scalping / Day Trading / Swing
-
-💡 Idei de intrări zilnice – Entry, SL, TP pe Gold și Forex
-
-🎓 Cursuri GRATUITE – Începători & Avansați
-
-🧠 Cursuri Psihologie & Dezvoltare Personală
-
-🤝 Affiliate Partnerships
-
-📊 Acces la sesiuni de Macroeconomie
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-💰 Investiția ta: doar 20€/lună
-
-Nu rata această oportunitate de a face parte din comunitatea noastră VIP.
-
-Contactează-ne pentru a-ți rezerva locul!
-
-Cu respect,
-Echipa ProFX`,
-          createdAt: new Date().toISOString()
-        };
-        await supabase.from("settings").upsert(defaultVipTemplate);
-        setVipEmailTemplate(defaultVipTemplate);
-      }
+      const result = await manageEmailTemplateAsAdmin({ method: 'GET', templateId: 'vipEmailTemplate' });
+      setVipEmailTemplate(result.template || null);
     } catch (err) {
       console.error("Eroare fetch VIP email template:", err);
     }
@@ -677,6 +582,61 @@ Echipa ProFX`,
     return result;
   };
 
+  const updateLeadAsAdmin = async ({ leadId, nume, telefon, email, status = null }) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !isTokenValid(token)) {
+      throw new Error('Sesiune invalidă. Reautentifică-te.');
+    }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/update-lead`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ leadId, nume, telefon, email, status }),
+    }, EDIT_LEAD_REQUEST_TIMEOUT_MS);
+
+    const result = await parseJsonResponse(response);
+    if (!response.ok) {
+      const errorParts = [result.error, result.details, `HTTP ${response.status}`].filter(Boolean);
+      throw new Error(errorParts.join(': ') || 'Actualizarea leadului a eșuat');
+    }
+
+    return result;
+  };
+
+  const manageEmailTemplateAsAdmin = async ({ method = 'GET', templateId, subject = null, body = null }) => {
+    const token = localStorage.getItem('authToken');
+    if (!token || !isTokenValid(token)) {
+      throw new Error('Sesiune invalidă. Reautentifică-te.');
+    }
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const isGet = method === 'GET';
+    const endpoint = isGet
+      ? `${supabaseUrl}/functions/v1/manage-email-templates?templateId=${encodeURIComponent(templateId)}`
+      : `${supabaseUrl}/functions/v1/manage-email-templates`;
+
+    const response = await fetchWithTimeout(endpoint, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      ...(isGet ? {} : { body: JSON.stringify({ templateId, subject, body }) }),
+    }, TEMPLATE_REQUEST_TIMEOUT_MS);
+
+    const result = await parseJsonResponse(response);
+    if (!response.ok) {
+      const errorParts = [result.error, result.details, `HTTP ${response.status}`].filter(Boolean);
+      throw new Error(errorParts.join(': ') || 'Operațiunea pentru template a eșuat');
+    }
+
+    return result;
+  };
+
   const manageLeadAssignmentsAsAdmin = async ({ action, mentorId = null, requestedCount = null, leadId = null, isCurrentlyDisabled = null }) => {
     const token = localStorage.getItem('authToken');
     if (!token || !isTokenValid(token)) {
@@ -705,7 +665,7 @@ Echipa ProFX`,
   // ==================== AUTO-ALLOCATE ====================
   const checkAndAutoAllocate = useCallback(async () => {
     let modificari = false;
-    
+
     // Verifică dacă un mentor are program activ (leaduri confirmate/neconfirmate/in_program sau emailuri trimise)
     const mentorAreProgramActiv = (mentorId) => {
       return leaduri.some(l =>
@@ -715,23 +675,22 @@ Echipa ProFX`,
         )
       );
     };
-    
+
     try {
       // PRIORITATE 1: Realocă IMEDIAT leadurile neconfirmate
       const leaduriNeconfirmate = leaduri.filter(l => l.status === LEAD_STATUS.NECONFIRMAT);
-      
+
       if (leaduriNeconfirmate.length > 0) {
         console.log(`🔄 Găsite ${leaduriNeconfirmate.length} leaduri neconfirmate - se realocă automat...`);
         modificari = true;
-        
-        // Track local lead counts per mentor to enforce 30-lead cap within the loop
+
         const localLeadCounts = {};
         mentoriData.forEach(m => { localLeadCounts[m.id] = m.leaduriAlocate || 0; });
-        
+
         for (const lead of leaduriNeconfirmate) {
           const mentoriSortati = [...mentoriData].sort((a, b) => a.ordineCoada - b.ordineCoada);
           const mentorActual = lead.mentorAlocat;
-          
+
           const MAX_REALOCARI = 5;
           if ((lead.numarReAlocari || 0) >= MAX_REALOCARI) {
             console.warn(`⚠️ Lead "${lead.nume}" a atins limita de ${MAX_REALOCARI} re-alocări — skip`);
@@ -740,23 +699,22 @@ Echipa ProFX`,
 
           const mentorNou = mentoriSortati.find(m => {
             const leadCnt = localLeadCounts[m.id] || 0;
-            // Sare mentorii care sunt în program activ (au webinar programat/confirmat)
             if (mentorAreProgramActiv(m.id)) return false;
             return m.id !== mentorActual && leadCnt < 30 && m.available && !m.manuallyDisabled;
           });
-          
+
           if (!mentorNou) {
             console.warn(`⚠️ Nu există mentor disponibil pentru "${lead.nume}"`);
             continue;
           }
-          
+
           const mentorInfo = MENTORI_DISPONIBILI.find(m => m.id === mentorNou.id);
           const mentorNume = mentorInfo ? mentorInfo.nume : mentorNou.id;
-          
+
           if (lead.alocareId) {
             const alocareVeche = alocariActive.find(a => a.id === lead.alocareId);
             if (alocareVeche) {
-              const leaduriRamase = alocareVeche.leaduri.filter(id => id !== lead.id);
+              const leaduriRamase = (alocareVeche.leaduri || []).filter(id => id !== lead.id);
               if (leaduriRamase.length === 0) {
                 await supabase.from("alocari").delete().eq("id", lead.alocareId);
               } else {
@@ -768,55 +726,28 @@ Echipa ProFX`,
               }
             }
           }
-          
-          // Decrementează contorul mentorului vechi
-          if (mentorActual && localLeadCounts[mentorActual] !== undefined) {
-            localLeadCounts[mentorActual] = Math.max(0, (localLeadCounts[mentorActual] || 0) - 1);
-          }
-          
-          const alocareExistenta = alocariActive.find(a => a.mentorId === mentorNou.id && a.status === 'activa');
-          let alocRef;
-          
-          if (alocareExistenta) {
-            const leaduriActualizate = [...alocareExistenta.leaduri, lead.id];
-            await supabase.from("alocari").update({
-              numarLeaduri: leaduriActualizate.length,
-              leaduri: leaduriActualizate,
-              ultimaActualizare: new Date().toISOString()
-            }).eq("id", alocareExistenta.id);
-            alocRef = { id: alocareExistenta.id };
-          } else {
-            const { data: newAloc } = await supabase.from("alocari").insert({
-              mentorId: mentorNou.id,
-              mentorNume: mentorNume,
-              numarLeaduri: 1,
-              leaduri: [lead.id],
-              createdAt: new Date().toISOString(),
-              status: 'activa'
-            }).select("id").single();
-            alocRef = newAloc;
-          }
-          
+
           const da = new Date().toISOString();
           await supabase.from("leaduri").update({
             status: LEAD_STATUS.ALOCAT,
             mentorAlocat: mentorNou.id,
-            alocareId: alocRef.id,
             dataAlocare: da,
             dataTimeout: null,
-            emailTrimis: false,
-            istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
+            dataConfirmare: null,
             numarReAlocari: (lead.numarReAlocari || 0) + 1,
-            motivNeconfirmare: null
+            istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
+            emailTrimis: false,
           }).eq("id", lead.id);
-          
-          // Incrementează contorul local al mentorului nou
+
+          if (mentorActual) {
+            localLeadCounts[mentorActual] = Math.max(0, (localLeadCounts[mentorActual] || 1) - 1);
+          }
           localLeadCounts[mentorNou.id] = (localLeadCounts[mentorNou.id] || 0) + 1;
-          
+
           await supabase.from("mentori").update({
             leaduriAlocate: localLeadCounts[mentorNou.id]
           }).eq("id", mentorNou.id);
-          
+
           console.log(`✅ Re-alocare automată: Lead "${lead.nume}" de la ${mentorActual} -> ${mentorNume} (${localLeadCounts[mentorNou.id]}/30)`);
         }
         
@@ -1409,13 +1340,12 @@ Echipa ProFX`,
     }
     setLoading(true);
     try {
-      const { error: upsertErr } = await supabase.from("settings").upsert({
-        id: "vipEmailTemplate",
+      await manageEmailTemplateAsAdmin({
+        method: 'POST',
+        templateId: 'vipEmailTemplate',
         subject: editingVipTemplate.subject,
         body: editingVipTemplate.body,
-        updatedAt: new Date().toISOString()
       });
-      if (upsertErr) throw upsertErr;
       await fetchVipEmailTemplate();
       setShowVipEmailTemplateEditor(false);
       setError('');
@@ -1494,13 +1424,12 @@ Echipa ProFX`,
 
     setLoading(true);
     try {
-      const { error: upsertErr } = await supabase.from("settings").upsert({
-        id: "emailTemplate",
+      await manageEmailTemplateAsAdmin({
+        method: 'POST',
+        templateId: 'emailTemplate',
         subject: editingTemplate.subject,
         body: editingTemplate.body,
-        updatedAt: new Date().toISOString()
       });
-      if (upsertErr) throw upsertErr;
       await fetchEmailTemplate();
       setShowEmailTemplateEditor(false);
       setError('');
@@ -1574,43 +1503,6 @@ Echipa ProFX`,
       : [];
 
     return lead?.mentorAlocat || historyMentors[historyMentors.length - 1] || null;
-  };
-
-  const finalizeLeadProgram = async (lead, finalUpdates) => {
-    const historyMentors = Array.isArray(lead?.istoricMentori)
-      ? lead.istoricMentori.filter(Boolean)
-      : [];
-    const mentorProgramId = getLeadProgramMentorId(lead);
-    const mergedHistory = [...historyMentors];
-
-    if (mentorProgramId && mergedHistory[mergedHistory.length - 1] !== mentorProgramId) {
-      mergedHistory.push(mentorProgramId);
-    }
-
-    if (lead.alocareId) {
-      const alocareCurenta = alocariActive.find(a => a.id === lead.alocareId);
-      if (alocareCurenta) {
-        const leaduriRamase = (alocareCurenta.leaduri || []).filter(id => id !== lead.id);
-        if (leaduriRamase.length === 0) {
-          await supabase.from('alocari').delete().eq('id', lead.alocareId);
-        } else {
-          await supabase.from('alocari').update({
-            numarLeaduri: leaduriRamase.length,
-            leaduri: leaduriRamase,
-            ultimaActualizare: new Date().toISOString()
-          }).eq('id', lead.alocareId);
-        }
-      }
-    }
-
-    const { error: updateErr } = await supabase.from('leaduri').update({
-      ...finalUpdates,
-      mentorAlocat: null,
-      alocareId: null,
-      istoricMentori: mergedHistory,
-    }).eq('id', lead.id);
-
-    if (updateErr) throw updateErr;
   };
 
   const getCompletedSession3TimeLeftMs = (lead, nowTs = Date.now()) => {
@@ -1894,23 +1786,14 @@ Echipa ProFX`,
     if (!editLeadData.nume || !editLeadData.telefon || !editLeadData.email) { setError("Toate campurile sunt obligatorii"); return; }
     setLoading(true); setError(""); setSuccess("");
     try {
-      const lead = leaduri.find(l => l.id === leadId);
-      if (!lead) throw new Error('Lead negasit');
-
-      const normalizedEmail = normalizeLeadEmail(editLeadData.email);
-      await ensureLeadEmailIsUnique(normalizedEmail, { excludeLeadId: leadId });
-
-      const updatePayload = { nume: sanitizeText(editLeadData.nume), telefon: sanitizePhone(editLeadData.telefon), email: normalizedEmail };
-      if (editLeadData.status) updatePayload.status = editLeadData.status;
-
-      if (updatePayload.status && isFinalizedProgramLead({ status: updatePayload.status })) {
-        await finalizeLeadProgram(lead, updatePayload);
-        await fetchAllData();
-      } else {
-        await supabase.from("leaduri").update(updatePayload).eq("id", leadId);
-        await fetchLeaduri();
-      }
-
+      await updateLeadAsAdmin({
+        leadId,
+        nume: editLeadData.nume,
+        telefon: editLeadData.telefon,
+        email: editLeadData.email,
+        status: editLeadData.status || null,
+      });
+      await fetchAllData();
       setSuccess("Lead actualizat cu succes!"); setEditingLead(null);
     } catch (err) {
       const errorMessage = err?.message || '';

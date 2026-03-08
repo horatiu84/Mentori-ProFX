@@ -8,6 +8,8 @@
 4. **update-mentor-schedule** - Setează sau resetează sesiunile webinar 1:20 pentru admin sau mentorul propriu
 5. **allocate-leads** - Alocă manual sau automat leaduri către mentori prin service role
 6. **update-lead-attendance** - Marchează și corectează prezența leadurilor din dashboard-ul mentorului
+7. **update-lead** - Editează leaduri din dashboard-ul de admin prin service role
+8. **manage-email-templates** - Citește și salvează template-urile email/VIP prin service role
 
 ## Instalare Supabase CLI
 
@@ -60,6 +62,8 @@ npx supabase functions deploy delete-leads --no-verify-jwt
 npx supabase functions deploy update-mentor-schedule --no-verify-jwt
 npx supabase functions deploy allocate-leads --no-verify-jwt
 npx supabase functions deploy update-lead-attendance --no-verify-jwt
+npx supabase functions deploy update-lead --no-verify-jwt
+npx supabase functions deploy manage-email-templates --no-verify-jwt
 
 # Sau deploy toate dintr-o dată
 npx supabase functions deploy
@@ -85,6 +89,8 @@ După deploy, funcțiile vor fi disponibile la:
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-mentor-schedule`
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/allocate-leads`
 - `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-lead-attendance`
+- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-lead`
+- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/manage-email-templates`
 
 Aplicația React deja folosește aceste URL-uri, așa că nu mai trebuie modificat nimic în cod! 🎉
 
@@ -98,6 +104,8 @@ npx supabase functions insights delete-leads
 npx supabase functions insights update-mentor-schedule
 npx supabase functions insights allocate-leads
 npx supabase functions insights update-lead-attendance
+npx supabase functions insights update-lead
+npx supabase functions insights manage-email-templates
 ```
 
 Sau direct în Supabase Dashboard:
@@ -121,6 +129,10 @@ supabase/
     └── allocate-leads/
         └── index.ts
     └── update-lead-attendance/
+        └── index.ts
+    └── update-lead/
+        └── index.ts
+    └── manage-email-templates/
         └── index.ts
 ```
 
