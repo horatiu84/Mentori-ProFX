@@ -121,6 +121,32 @@ export default function Mentori1La20() {
 
   const normalizeLeadEmail = (email) => sanitizeEmail(email || '');
 
+  const extractExcelCellText = (value) => {
+    if (value == null) return '';
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+    if (Array.isArray(value?.richText)) {
+      return value.richText.map((part) => part?.text || '').join('');
+    }
+    if (typeof value === 'object') {
+      if (typeof value.text === 'string' && value.text.trim()) {
+        return value.text;
+      }
+      if (typeof value.hyperlink === 'string' && value.hyperlink.trim()) {
+        return value.hyperlink.replace(/^mailto:/i, '');
+      }
+      if (value.result != null) {
+        return extractExcelCellText(value.result);
+      }
+    }
+
+    return String(value);
+  };
+
   const findLeadByEmail = async (email, excludeLeadId = null) => {
     const normalizedEmail = normalizeLeadEmail(email);
     if (!normalizedEmail) return null;
@@ -936,12 +962,12 @@ export default function Mentori1La20() {
           await workbook.xlsx.load(buffer);
           const worksheet = workbook.worksheets[0];
           const headers = [];
-          worksheet.getRow(1).eachCell((cell) => { headers.push(cell.value); });
+          worksheet.getRow(1).eachCell((cell) => { headers.push(extractExcelCellText(cell.value)); });
           const jsonData = [];
           worksheet.eachRow((row, rowNumber) => {
             if (rowNumber === 1) return;
             const rowObj = {};
-            row.eachCell((cell, colNumber) => { rowObj[headers[colNumber - 1]] = cell.value; });
+            row.eachCell((cell, colNumber) => { rowObj[headers[colNumber - 1]] = extractExcelCellText(cell.value); });
             jsonData.push(rowObj);
           });
           const leaduriValide = jsonData.map((row, index) => {
@@ -949,7 +975,7 @@ export default function Mentori1La20() {
             const telefon = row['Telefon'] || row['telefon'] || row['Phone'] || row['phone'] || '';
             const email = row['Email'] || row['email'] || '';
             if (!nume || !telefon || !email) throw new Error('Linia ' + (index + 2) + ': Nume, telefon si email sunt obligatorii');
-            return { nume: String(nume).trim(), telefon: String(telefon).trim(), email: normalizeLeadEmail(String(email)),
+            return { nume: extractExcelCellText(nume).trim(), telefon: extractExcelCellText(telefon).trim(), email: normalizeLeadEmail(extractExcelCellText(email)),
               status: LEAD_STATUS.NEALOCAT, mentorAlocat: null, dataAlocare: null, dataConfirmare: null,
               dataTimeout: null, statusOneToTwenty: ONE_TO_TWENTY_STATUS.PENDING, dataOneToTwenty: null,
               numarReAlocari: 0, istoricMentori: [], createdAt: new Date().toISOString() };
