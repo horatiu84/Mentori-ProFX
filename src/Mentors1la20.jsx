@@ -1185,10 +1185,18 @@ export default function Mentori1La20() {
       return;
     }
 
-    const leadCntActual = mentorEligibil.leaduriAlocate || 0;
+    const leadCntActual = leaduri.filter(l => l.mentorAlocat === manualAllocMentor && !isFinalizedProgramLead(l)).length;
     const spatDisponibil = 30 - leadCntActual;
+    const isManuallyDisabled = mentorEligibil.manuallyDisabled === true;
+    const hasProgramActiv = leaduri.some(l =>
+      l.mentorAlocat === manualAllocMentor && (
+        [LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM].includes(l.status) ||
+        (l.status === LEAD_STATUS.ALOCAT && l.emailTrimis === true)
+      )
+    );
+    const computedAvailable = !isManuallyDisabled && !hasProgramActiv && leadCntActual < 30;
 
-    if (!mentorEligibil.available) {
+    if (!computedAvailable) {
       // Mentor "în program" — poate primi DOAR propriile leaduri expirate
       const ownExpiredLeads = leaduri.filter(
         l => isExpiredUnallocatedLead(l) && getLeadLastAssignedMentorId(l) === manualAllocMentor
@@ -1756,6 +1764,8 @@ export default function Mentori1La20() {
   const handleReallocateLead = async (leadId) => {
     showConfirmDialog("Re-alocare", "Re-aloca acest lead catre alt mentor disponibil?", async () => {
       setLoading(true);
+      setError('');
+      setSuccess('');
       try {
         const lead = leaduri.find(l => l.id === leadId);
         if (!lead) { setError("Lead negasit"); return; }
@@ -1769,33 +1779,14 @@ export default function Mentori1La20() {
         }).sort((a, b) => a.ordineCoada - b.ordineCoada);
         if (mentDisp.length === 0) { setError("Nu exista mentori disponibili"); setLoading(false); return; }
         const mentorNou = mentDisp[0];
-        const oldMentorId = lead.mentorAlocat;
-        const da = new Date().toISOString();
-        await supabase.from("leaduri").update({
-          status: LEAD_STATUS.ALOCAT, 
-          mentorAlocat: mentorNou.id, 
-          dataAlocare: da, 
-          dataTimeout: null,
-          dataConfirmare: null, 
-          motivNeconfirmare: null,
-          numarReAlocari: (lead.numarReAlocari || 0) + 1,
-          istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
-          emailTrimis: false
-        }).eq("id", leadId);
-        // Decrement old mentor's count
-        if (oldMentorId) {
-          const oldMentor = mentoriData.find(m => m.id === oldMentorId);
-          if (oldMentor) {
-            await supabase.from("mentori").update({ leaduriAlocate: Math.max(0, (oldMentor.leaduriAlocate || 1) - 1) }).eq("id", oldMentorId);
-          }
-          // Clean up old allocation record
-          if (lead.alocareId) {
-            await supabase.from("alocari").delete().eq("id", lead.alocareId);
-          }
-        }
-        await supabase.from("mentori").update({ leaduriAlocate: (mentorNou.leaduriAlocate || 0) + 1 }).eq("id", mentorNou.id);
-        await fetchAllData(); setSuccess('Lead re-alocat catre ' + mentorNou.nume + '!');
-      } catch (err) { setError("Eroare la re-alocarea leadului"); } finally { setLoading(false); }
+        const result = await manageLeadAssignmentsAsAdmin({
+          action: 'assign_single',
+          leadId,
+          mentorId: mentorNou.id,
+        });
+        await fetchAllData();
+        setSuccess(result.message || ('Lead re-alocat catre ' + mentorNou.nume + '!'));
+      } catch (err) { setError(err?.message || "Eroare la re-alocarea leadului"); } finally { setLoading(false); }
     });
   };
 
@@ -2006,50 +1997,15 @@ export default function Mentori1La20() {
 
       const targetMentor = mentoriData.find(m => m.id === targetMentorId);
       if (!targetMentor) { setError('Mentor negasit'); return; }
-
-      const oldMentorId = lead.mentorAlocat;
-
-      // Remove lead from old mentor if different
-      if (oldMentorId && oldMentorId !== targetMentorId) {
-        const oldMentor = mentoriData.find(m => m.id === oldMentorId);
-        if (oldMentor) {
-          await supabase.from('mentori').update({ leaduriAlocate: Math.max(0, (oldMentor.leaduriAlocate || 1) - 1) }).eq('id', oldMentorId);
-        }
-        if (lead.alocareId) {
-          const { data: allocation } = await supabase.from('alocari').select('id, leaduri').eq('id', lead.alocareId).maybeSingle();
-          if (allocation) {
-            const remaining = (allocation.leaduri || []).filter(id => id !== leadId);
-            if (remaining.length === 0) {
-              await supabase.from('alocari').delete().eq('id', lead.alocareId);
-            } else {
-              await supabase.from('alocari').update({ numarLeaduri: remaining.length, leaduri: remaining, ultimaActualizare: new Date().toISOString() }).eq('id', lead.alocareId);
-            }
-          }
-        }
-      }
-
-      const newHistory = [...(lead.istoricMentori || []).filter(Boolean)];
-      if (newHistory[newHistory.length - 1] !== targetMentorId) newHistory.push(targetMentorId);
-
-      await supabase.from('leaduri').update({
-        status: LEAD_STATUS.ALOCAT,
-        mentorAlocat: targetMentorId,
-        alocareId: null,
-        dataAlocare: new Date().toISOString(),
-        dataTimeout: null,
-        dataConfirmare: null,
-        motivNeconfirmare: null,
-        emailTrimis: false,
-        numarReAlocari: (lead.numarReAlocari || 0) + (oldMentorId && oldMentorId !== targetMentorId ? 1 : 0),
-        istoricMentori: newHistory,
-      }).eq('id', leadId);
-
-      await supabase.from('mentori').update({ leaduriAlocate: (targetMentor.leaduriAlocate || 0) + 1 }).eq('id', targetMentorId);
-
+      const result = await manageLeadAssignmentsAsAdmin({
+        action: 'assign_single',
+        leadId,
+        mentorId: targetMentorId,
+      });
       await fetchAllData();
-      setSuccess(`Lead-ul "${lead.nume}" a fost atribuit lui ${targetMentor.nume}!`);
+      setSuccess(result.message || `Lead-ul "${lead.nume}" a fost atribuit lui ${targetMentor.nume}!`);
     } catch (err) {
-      setError('Eroare la atribuirea leadului: ' + (err.message || ''));
+      setError('Eroare la atribuirea leadului: ' + (err?.message || ''));
     } finally {
       setLoading(false);
     }

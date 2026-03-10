@@ -24,6 +24,12 @@ const LEAD_STATUS = {
   CONFIRMAT: "confirmat",
   NECONFIRMAT: "neconfirmat",
   IN_PROGRAM: "in_program",
+  NO_SHOW: "no_show",
+  COMPLET: "complet",
+  COMPLET_3_SESIUNI: "complet_3_sesiuni",
+  COMPLET_2_SESIUNI: "complet_2_sesiuni",
+  COMPLET_SESIUNE_FINALA: "complet_sesiune_finala",
+  COMPLET_SESIUNE_1: "complet_sesiune_1",
 };
 
 const ACTIVE_PROGRAM_STATUSES = new Set([
@@ -31,6 +37,15 @@ const ACTIVE_PROGRAM_STATUSES = new Set([
   LEAD_STATUS.CONFIRMAT,
   LEAD_STATUS.NECONFIRMAT,
   LEAD_STATUS.IN_PROGRAM,
+]);
+
+const FINALIZED_PROGRAM_STATUSES = new Set([
+  LEAD_STATUS.COMPLET,
+  LEAD_STATUS.COMPLET_3_SESIUNI,
+  LEAD_STATUS.COMPLET_2_SESIUNI,
+  LEAD_STATUS.COMPLET_SESIUNE_FINALA,
+  LEAD_STATUS.COMPLET_SESIUNE_1,
+  LEAD_STATUS.NO_SHOW,
 ]);
 
 const isExpiredUnallocatedLead = (lead: Record<string, unknown>) => (
@@ -276,6 +291,92 @@ const deallocateSingleLead = async (
   return {
     leadName: String(lead.nume || "Lead"),
     mentorId: lead.mentorAlocat ? String(lead.mentorAlocat) : null,
+  };
+};
+
+const assignSingleLeadToMentor = async (
+  supabase: ReturnType<typeof createAdminClient>,
+  leadId: string,
+  mentorId: string,
+) => {
+  const { data: lead, error: leadError } = await supabase
+    .from("leaduri")
+    .select("id, nume, status, mentorAlocat, alocareId, istoricMentori, numarReAlocari")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  if (leadError) throw leadError;
+  if (!lead) {
+    throw new Error("Lead negasit");
+  }
+
+  if (FINALIZED_PROGRAM_STATUSES.has(String(lead.status || ""))) {
+    throw new Error("Leadul a finalizat programul si nu mai poate fi atribuit");
+  }
+
+  const currentMentorId = lead.mentorAlocat ? String(lead.mentorAlocat) : null;
+  if (currentMentorId === mentorId) {
+    throw new Error("Leadul este deja atribuit acestui mentor");
+  }
+
+  const targetMentor = await syncMentorState(supabase, mentorId);
+  if (!targetMentor) {
+    throw new Error("Mentor invalid");
+  }
+
+  if (Boolean(targetMentor.manuallyDisabled)) {
+    throw new Error("Mentorul selectat nu poate primi leaduri noi");
+  }
+
+  if (Number(targetMentor.leaduriAlocate || 0) >= 30) {
+    throw new Error("Mentorul selectat are deja 30 de leaduri");
+  }
+
+  if (lead.alocareId) {
+    await removeLeadFromAllocation(supabase, String(lead.alocareId), String(lead.id));
+  }
+
+  const history = Array.isArray(lead.istoricMentori) ? lead.istoricMentori.filter(Boolean) : [];
+  const nextHistory = history[history.length - 1] === mentorId ? history : [...history, mentorId];
+
+  const { data: updatedLead, error: leadUpdateError } = await supabase
+    .from("leaduri")
+    .update({
+      status: LEAD_STATUS.ALOCAT,
+      mentorAlocat: mentorId,
+      alocareId: null,
+      dataAlocare: new Date().toISOString(),
+      dataTimeout: null,
+      dataConfirmare: null,
+      motivNeconfirmare: null,
+      emailTrimis: false,
+      numarReAlocari: Number(lead.numarReAlocari || 0) + (currentMentorId && currentMentorId !== mentorId ? 1 : 0),
+      istoricMentori: nextHistory,
+    })
+    .eq("id", leadId)
+    .select("id, nume, mentorAlocat, status")
+    .single();
+
+  if (leadUpdateError) throw leadUpdateError;
+
+  const mentorIdsToSync = new Set<string>([mentorId]);
+  if (currentMentorId && currentMentorId !== mentorId) {
+    mentorIdsToSync.add(currentMentorId);
+  }
+
+  let syncedTargetMentor = targetMentor;
+  for (const mentorIdToSync of mentorIdsToSync) {
+    const syncedMentor = await syncMentorState(supabase, mentorIdToSync);
+    if (mentorIdToSync === mentorId && syncedMentor) {
+      syncedTargetMentor = syncedMentor;
+    }
+  }
+
+  return {
+    leadName: String(updatedLead?.nume || lead.nume || "Lead"),
+    mentorId,
+    mentorName: getMentorDisplayName(syncedTargetMentor),
+    previousMentorId: currentMentorId,
   };
 };
 
@@ -572,6 +673,23 @@ serve(async (req: Request) => {
         success: true,
         ...result,
         message: `Leadul \"${result.leadName}\" a fost dezalocat cu succes!`,
+      });
+    }
+
+    if (action === "assign_single") {
+      if (!leadId || typeof leadId !== "string") {
+        return jsonResponse(req, 400, { error: "leadId este obligatoriu" });
+      }
+
+      if (!mentorId || typeof mentorId !== "string") {
+        return jsonResponse(req, 400, { error: "mentorId este obligatoriu" });
+      }
+
+      const result = await assignSingleLeadToMentor(supabase, leadId, mentorId);
+      return jsonResponse(req, 200, {
+        success: true,
+        ...result,
+        message: `Lead-ul \"${result.leadName}\" a fost atribuit lui ${result.mentorName}!`,
       });
     }
 
