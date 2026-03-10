@@ -28,7 +28,7 @@ export default function MentorDashboard({
   getCompletedSession3TimeLeftMs,
   // Modals
   showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, handleResetDateSchedule, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
-  showModal, modalConfig, closeModal, handleModalConfirm,
+  showModal, modalConfig, closeModal, handleModalConfirm, handleModalCancel,
 }) {
   // Countdown timer state
   const [timeUntilWebinar, setTimeUntilWebinar] = useState(null);
@@ -464,8 +464,8 @@ export default function MentorDashboard({
               <div className="flex gap-3">
                 {modalConfig.type === 'confirm' ? (
                   <>
-                    <button onClick={closeModal} className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/50 text-gray-300 px-4 py-3 rounded-xl transition-all font-medium">Anuleaza</button>
-                    <button onClick={handleModalConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl transition-all font-medium">Confirma</button>
+                    <button onClick={handleModalCancel} className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/50 text-gray-300 px-4 py-3 rounded-xl transition-all font-medium">{modalConfig.cancelLabel || 'Anuleaza'}</button>
+                    <button onClick={handleModalConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl transition-all font-medium">{modalConfig.confirmLabel || 'Confirma'}</button>
                   </>
                 ) : (
                   <button onClick={closeModal} className={"w-full px-4 py-3 rounded-xl transition-all font-medium border " + (modalConfig.type === 'error' ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Am inteles</button>

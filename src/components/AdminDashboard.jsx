@@ -23,6 +23,7 @@ export default function AdminDashboard({
   alocaLeaduriAutomata, canAllocateLeads, stergeLeaduri, exportToExcel,
   alocaLeaduriManual, showManualAllocModal, setShowManualAllocModal,
   manualAllocMentor, setManualAllocMentor, manualAllocCount, setManualAllocCount,
+  manualAllocPreview, manualExpiredLeadCountTotal, manualExpiredCountsByMentor,
   dezalocaLeaduriMentor, dezalocaLeadSingular, stergeLeaduriMentor,
   selectedMentor, setSelectedMentor,
   // Upload
@@ -32,7 +33,7 @@ export default function AdminDashboard({
   // Lead edit
   editingLead, editLeadData, setEditLeadData,
   handleEditLead, handleSaveEditLead, handleCancelEdit,
-  handleReallocateLead, handleDeleteLead,
+  handleReallocateLead, handleDeleteLead, handleAssignLeadToMentor,
   // Modals
   showDateModal, manualDate, setManualDate, manualDate2, setManualDate2, manualDate3, setManualDate3, handleConfirmDate, handleResetDateSchedule, setShowDateModal, selectedMentorForDate, setSelectedMentorForDate,
   showAdminEmailModal, selectedMentorForEmail, setShowAdminEmailModal,
@@ -47,15 +48,23 @@ export default function AdminDashboard({
   vipEmailPreview, setVipEmailPreview,
   showVipEmailPreviewFn, sendVipEmails,
   usersAccounts, loadingUsersAccounts, fetchUsersAccounts, updateUserCredentials, resetUserPasswordByAdmin,
-  showModal, modalConfig, closeModal, handleModalConfirm,
+  showModal, modalConfig, closeModal, handleModalConfirm, handleModalCancel,
 }) {
   const [activeMainTab, setActiveMainTab] = useState('leaduri');
   const [activeLeadTab, setActiveLeadTab] = useState('activi');
   const [absSearchQuery, setAbsSearchQuery] = useState('');
+  const [showAssignMentorModal, setShowAssignMentorModal] = useState(false);
+  const [assignMentorLeadId, setAssignMentorLeadId] = useState(null);
+  const [selectedAssignMentor, setSelectedAssignMentor] = useState('');
+  const openAssignMentorModal = (leadId) => { setAssignMentorLeadId(leadId); setSelectedAssignMentor(''); setShowAssignMentorModal(true); };
+  const closeAssignMentorModal = () => { setShowAssignMentorModal(false); setAssignMentorLeadId(null); setSelectedAssignMentor(''); };
+  const confirmAssignMentor = async () => { if (!assignMentorLeadId || !selectedAssignMentor) return; await handleAssignLeadToMentor(assignMentorLeadId, selectedAssignMentor); closeAssignMentorModal(); };
   const [absCurrentPage, setAbsCurrentPage] = useState(1);
   const [absSortBy, setAbsSortBy] = useState('data-desc');
   const [accountForms, setAccountForms] = useState({});
   const [hasTriedAccountsLoad, setHasTriedAccountsLoad] = useState(false);
+  const selectedMentorInProgramData = manualAllocMentor ? mentoriUnici.find(m => m.id === manualAllocMentor) : null;
+  const selectedMentorIsInProgram = !!(selectedMentorInProgramData && !selectedMentorInProgramData.available && !selectedMentorInProgramData.manuallyDisabled);
   const absLeaduriPerPage = 10;
   const absolventiAll = leaduri.filter(l => l.status === LEAD_STATUS.COMPLET_3_SESIUNI);
   const absolventiFiltrati = absolventiAll.filter(l =>
@@ -819,6 +828,10 @@ export default function AdminDashboard({
                             </>
                           ) : (
                             <>
+                              {lead.status !== LEAD_STATUS.COMPLET_3_SESIUNI && (
+                                <button onClick={() => openAssignMentorModal(lead.id)} disabled={loading}
+                                  className="w-full bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/50 text-violet-300 px-3 py-1.5 rounded-lg text-xs font-semibold">👤 Atribuie Mentor</button>
+                              )}
                               {lead.status === LEAD_STATUS.NECONFIRMAT && (
                                 <button onClick={() => handleReallocateLead(lead.id)} disabled={loading}
                                   className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-3 py-1.5 rounded-lg text-xs font-semibold">Re-aloca</button>
@@ -914,6 +927,10 @@ export default function AdminDashboard({
                                 </div>
                               ) : (
                                 <div className="flex flex-col gap-1.5">
+                                  {lead.status !== LEAD_STATUS.COMPLET_3_SESIUNI && (
+                                    <button onClick={() => openAssignMentorModal(lead.id)} disabled={loading}
+                                      className="bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/50 text-violet-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">👤 Atribuie</button>
+                                  )}
                                   {lead.status === LEAD_STATUS.NECONFIRMAT && (
                                     <button onClick={() => handleReallocateLead(lead.id)} disabled={loading}
                                       className="bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/50 text-blue-300 px-2 py-1 rounded-lg text-xs font-semibold transition-all">Re-aloca</button>
@@ -1522,6 +1539,7 @@ export default function AdminDashboard({
                       .sort((a, b) => a.ordineCoada - b.ordineCoada)
                       .map(mentor => {
                         const leadCnt = mentor.leaduriAlocate || 0;
+                        const expiredFromMentorCount = manualExpiredCountsByMentor?.[mentor.id] || 0;
                         const mentorInfo = MENTORI_DISPONIBILI.find(mDef => mDef.id === mentor.id);
                         const mentorNume = mentorInfo ? mentorInfo.nume : mentor.nume;
                         const isSelected = manualAllocMentor === mentor.id;
@@ -1538,7 +1556,12 @@ export default function AdminDashboard({
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between mb-1">
                                 <span className={"font-semibold text-sm " + (isSelected ? 'text-teal-300' : 'text-white')}>{mentorNume}</span>
-                                <span className="text-xs text-gray-400">{leadCnt}/30</span>
+                                <div className="flex items-center gap-2">
+                                  {expiredFromMentorCount > 0 && (
+                                    <span className="text-[11px] px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/40 text-amber-300">{expiredFromMentorCount} expirate</span>
+                                  )}
+                                  <span className="text-xs text-gray-400">{leadCnt}/30</span>
+                                </div>
                               </div>
                               <div className="w-full bg-gray-700/50 rounded-full h-1.5">
                                 <div className={"h-1.5 rounded-full transition-all " + (leadCnt <= 20 ? 'bg-gradient-to-r from-teal-500 to-cyan-400' : 'bg-gradient-to-r from-orange-500 to-red-500')} style={{width: Math.min((leadCnt/30)*100, 100)+'%'}} />
@@ -1553,13 +1576,38 @@ export default function AdminDashboard({
                   {/* Mentori in program */}
                   {mentoriUnici.some(m => !m.available) && (
                     <div className="space-y-2">
-                      <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">În Program — Indisponibili</p>
+                      <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">În Program</p>
                       {mentoriUnici
                         .filter(m => !m.available)
                         .sort((a, b) => a.ordineCoada - b.ordineCoada)
                         .map(mentor => {
                           const mentorInfo = MENTORI_DISPONIBILI.find(mDef => mDef.id === mentor.id);
                           const mentorNume = mentorInfo ? mentorInfo.nume : mentor.nume;
+                          const ownExpiredCount = manualExpiredCountsByMentor?.[mentor.id] || 0;
+                          const canSelectInProgram = !mentor.manuallyDisabled && ownExpiredCount > 0;
+                          const isSelected = manualAllocMentor === mentor.id;
+                          if (canSelectInProgram) {
+                            return (
+                              <button
+                                key={mentor.id}
+                                type="button"
+                                onClick={() => setManualAllocMentor(isSelected ? '' : mentor.id)}
+                                className={"w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left " + (isSelected ? 'border-amber-500/70 bg-amber-500/15' : 'border-gray-600/40 bg-gray-800/40 hover:border-amber-600/50 hover:bg-gray-700/40')}
+                              >
+                                <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-gray-600/50 shrink-0">
+                                  <img src={MENTOR_PHOTOS[mentor.id]} alt={mentorNume} className="w-full h-full object-cover" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <span className={"font-semibold text-sm " + (isSelected ? 'text-amber-300' : 'text-white')}>{mentorNume}</span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span className="text-[11px] px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/40 text-amber-300">{ownExpiredCount} expirate proprii</span>
+                                  <span className="text-xs px-2 py-0.5 rounded-full border bg-cyan-500/10 border-cyan-500/30 text-cyan-400">🔵 În Program</span>
+                                </div>
+                                {isSelected && <span className="text-amber-400 text-lg shrink-0">✓</span>}
+                              </button>
+                            );
+                          }
                           return (
                             <div key={mentor.id} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-700/30 bg-gray-800/20 opacity-50 cursor-not-allowed">
                               <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-gray-700/50 shrink-0 grayscale">
@@ -1591,6 +1639,43 @@ export default function AdminDashboard({
                   </p>
                 </div>
 
+                {selectedMentorIsInProgram ? (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-2">
+                    <p className="text-sm text-amber-200 font-semibold">🔁 Mentor în Program — Expirate Proprii</p>
+                    <p className="text-xs text-gray-300">
+                      Vor fi realocate <span className="text-amber-300 font-semibold">{manualExpiredCountsByMentor?.[manualAllocMentor] || 0}</span> leaduri care au expirat anterior la acest mentor. Nu pot fi alocate leaduri noi sau expirate de la alți mentori.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 space-y-2">
+                    <p className="text-sm text-amber-200 font-semibold">Prioritate la alocare</p>
+                    <p className="text-xs text-gray-300">
+                      Leaduri expirate nealocate în așteptare: <span className="text-amber-300 font-semibold">{manualExpiredLeadCountTotal || 0}</span>. Acestea intră primele la alocare, chiar dacă alegi alt mentor.
+                    </p>
+                    {manualAllocPreview && (
+                      <>
+                        <p className="text-xs text-gray-300">
+                          Pentru mentorul selectat vor intra primele <span className="text-amber-300 font-semibold">{manualAllocPreview.prioritizedExpiredBatchCount}</span> leaduri expirate dintr-un total de <span className="text-teal-300 font-semibold">{manualAllocPreview.allocateCount}</span> leaduri estimate.
+                        </p>
+                        {manualAllocPreview.sameMentorExpiredCount > 0 && (
+                          <p className="text-xs text-gray-300">
+                            <span className="text-amber-300 font-semibold">{manualAllocPreview.sameMentorExpiredCount}</span> au expirat anterior chiar de la acest mentor. La alocare vei fi intrebat daca vrei sa le retrimiti lui.
+                          </p>
+                        )}
+                        {manualAllocPreview.prioritizedLeadPreview.length > 0 && (
+                          <div className="flex flex-wrap gap-2 pt-1">
+                            {manualAllocPreview.prioritizedLeadPreview.map(lead => (
+                              <span key={lead.id} className={"text-[11px] px-2 py-1 rounded-full border " + (lead.isExpired ? 'bg-amber-500/10 border-amber-500/40 text-amber-200' : 'bg-gray-800/60 border-gray-600/40 text-gray-300')}>
+                                {lead.nume}{lead.isSameMentorExpired ? ' • expirata aici' : lead.isExpired ? ' • expirata' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-teal-500/10 border border-teal-500/30 rounded-xl p-4">
                   <p className="text-sm text-gray-300">
                     <span className="font-semibold text-teal-400">💡 Info:</span> Alocarea manuală permite atribuirea de leaduri chiar și când sunt mai puțin de 20, pentru situații speciale.
@@ -1620,6 +1705,93 @@ export default function AdminDashboard({
         </div>
       )}
 
+      {/* Assign Lead to Mentor Modal */}
+      {showAssignMentorModal && (() => {
+        const assignLead = leaduri.find(l => l.id === assignMentorLeadId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-2xl shadow-2xl border border-violet-700/50 max-w-md w-full animate-scaleIn">
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center bg-violet-500/20 border-2 border-violet-500/50">
+                    <span className="text-2xl">👤</span>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-violet-400">Atribuie Mentor</h3>
+                    {assignLead && <p className="text-sm text-gray-400 mt-0.5">Lead: <span className="text-white font-medium">{assignLead.nume}</span></p>}
+                  </div>
+                </div>
+                <div className="space-y-2 mb-5 max-h-80 overflow-y-auto pr-1">
+                  <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Selectează Mentor</p>
+                  {mentoriUnici
+                    .filter(m => !m.manuallyDisabled)
+                    .sort((a, b) => a.ordineCoada - b.ordineCoada)
+                    .map(mentor => {
+                      const leadCnt = mentor.leaduriAlocate || 0;
+                      const isFull = leadCnt >= 30;
+                      const isCurrent = assignLead?.mentorAlocat === mentor.id;
+                      const isSelected = selectedAssignMentor === mentor.id;
+                      const mentorInfo = MENTORI_DISPONIBILI.find(mDef => mDef.id === mentor.id);
+                      const mentorNume = mentorInfo ? mentorInfo.nume : mentor.nume;
+                      if (isFull) return (
+                        <div key={mentor.id} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-gray-700/30 bg-gray-800/20 opacity-40 cursor-not-allowed">
+                          <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-gray-700/50 shrink-0 grayscale">
+                            <img src={MENTOR_PHOTOS[mentor.id]} alt={mentorNume} className="w-full h-full object-cover" />
+                          </div>
+                          <span className="text-sm text-gray-500">{mentorNume}</span>
+                          <span className="ml-auto text-xs text-gray-500">30/30 plin</span>
+                        </div>
+                      );
+                      return (
+                        <button
+                          key={mentor.id}
+                          type="button"
+                          onClick={() => !isCurrent && setSelectedAssignMentor(isSelected ? '' : mentor.id)}
+                          disabled={isCurrent}
+                          className={"w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left " + (isCurrent ? 'border-gray-600/30 bg-gray-800/20 opacity-50 cursor-not-allowed' : isSelected ? 'border-violet-500/70 bg-violet-500/15' : 'border-gray-600/40 bg-gray-800/40 hover:border-violet-600/50 hover:bg-gray-700/40')}
+                        >
+                          <div className="w-9 h-9 rounded-full overflow-hidden border-2 border-gray-600/50 shrink-0">
+                            <img src={MENTOR_PHOTOS[mentor.id]} alt={mentorNume} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className={"font-semibold text-sm " + (isSelected ? 'text-violet-300' : 'text-white')}>{mentorNume}</span>
+                              {isCurrent && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-600/30 border border-gray-600/50 text-gray-400">curent</span>}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 bg-gray-700/50 rounded-full h-1">
+                                <div className={"h-1 rounded-full " + (leadCnt <= 20 ? 'bg-teal-500' : 'bg-orange-500')} style={{width: Math.min((leadCnt/30)*100,100)+'%'}} />
+                              </div>
+                              <span className="text-xs text-gray-400">{leadCnt}/30</span>
+                            </div>
+                          </div>
+                          <div className="shrink-0 flex items-center gap-1.5">
+                            {mentor.available ? (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full border bg-green-500/20 border-green-500/50 text-green-300">Liber</span>
+                            ) : (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full border bg-cyan-500/10 border-cyan-500/30 text-cyan-400">În Program</span>
+                            )}
+                            {isSelected && <span className="text-violet-400 text-base">✓</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={closeAssignMentorModal} className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-600/50 text-gray-300 px-4 py-3 rounded-xl transition-all font-medium">Anulează</button>
+                  <button
+                    onClick={confirmAssignMentor}
+                    disabled={!selectedAssignMentor || loading}
+                    className="flex-1 bg-violet-500/20 hover:bg-violet-500/30 border border-violet-500/50 text-violet-300 px-4 py-3 rounded-xl transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                    {loading ? 'Se atribuie...' : '👤 Atribuie'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
@@ -1635,8 +1807,8 @@ export default function AdminDashboard({
               <div className="flex gap-3">
                 {modalConfig.type === 'confirm' ? (
                   <>
-                    <button onClick={closeModal} className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/50 text-gray-300 px-4 py-3 rounded-xl transition-all font-medium">Anuleaza</button>
-                    <button onClick={handleModalConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl transition-all font-medium">Confirma</button>
+                    <button onClick={handleModalCancel} className="flex-1 bg-gray-600/20 hover:bg-gray-600/30 border border-gray-500/50 text-gray-300 px-4 py-3 rounded-xl transition-all font-medium">{modalConfig.cancelLabel || 'Anuleaza'}</button>
+                    <button onClick={handleModalConfirm} className="flex-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl transition-all font-medium">{modalConfig.confirmLabel || 'Confirma'}</button>
                   </>
                 ) : (
                   <button onClick={closeModal} className={"w-full px-4 py-3 rounded-xl transition-all font-medium border " + (modalConfig.type === 'error' ? 'bg-red-500/20 hover:bg-red-500/30 border-red-500/50 text-red-300' : 'bg-blue-500/20 hover:bg-blue-500/30 border-blue-500/50 text-blue-300')}>Am inteles</button>

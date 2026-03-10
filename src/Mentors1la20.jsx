@@ -42,7 +42,7 @@ export default function Mentori1La20() {
   const [manualDate2, setManualDate2] = useState('');
   const [manualDate3, setManualDate3] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [modalConfig, setModalConfig] = useState({ type: 'alert', title: '', message: '', onConfirm: null });
+  const [modalConfig, setModalConfig] = useState({ type: 'alert', title: '', message: '', onConfirm: null, onCancel: null, confirmLabel: 'Confirma', cancelLabel: 'Anuleaza' });
   const [mentorSearchQuery, setMentorSearchQuery] = useState('');
   const [mentorSortBy, setMentorSortBy] = useState('data-desc');
   const [mentorCurrentPage, setMentorCurrentPage] = useState(1);
@@ -208,24 +208,38 @@ export default function Mentori1La20() {
 
   // ==================== MODAL HELPERS ====================
   const showAlert = (title, message) => {
-    setModalConfig({ type: 'alert', title, message, onConfirm: null });
+    setModalConfig({ type: 'alert', title, message, onConfirm: null, onCancel: null, confirmLabel: 'Confirma', cancelLabel: 'Anuleaza' });
     setShowModal(true);
   };
 
   const showErrorModal = (message) => {
-    setModalConfig({ type: 'error', title: 'Eroare', message, onConfirm: null });
+    setModalConfig({ type: 'error', title: 'Eroare', message, onConfirm: null, onCancel: null, confirmLabel: 'Confirma', cancelLabel: 'Anuleaza' });
     setShowModal(true);
   };
 
-  const showConfirmDialog = (title, message, onConfirm) => {
-    setModalConfig({ type: 'confirm', title, message, onConfirm });
+  const showConfirmDialog = (title, message, onConfirm, options = {}) => {
+    setModalConfig({
+      type: 'confirm',
+      title,
+      message,
+      onConfirm,
+      onCancel: options.onCancel || null,
+      confirmLabel: options.confirmLabel || 'Confirma',
+      cancelLabel: options.cancelLabel || 'Anuleaza',
+    });
     setShowModal(true);
   };
 
   const closeModal = () => setShowModal(false);
   const handleModalConfirm = () => {
-    if (modalConfig.onConfirm) modalConfig.onConfirm();
+    const onConfirm = modalConfig.onConfirm;
     closeModal();
+    if (onConfirm) onConfirm();
+  };
+  const handleModalCancel = () => {
+    const onCancel = modalConfig.onCancel;
+    closeModal();
+    if (onCancel) onCancel();
   };
   const closeDateModal = () => {
     setShowDateModal(false);
@@ -248,6 +262,66 @@ export default function Mentori1La20() {
     LEAD_STATUS.NO_SHOW
   ];
   const isFinalizedProgramLead = (lead) => FINALIZED_PROGRAM_STATUSES.includes(lead?.status);
+  const isExpiredUnallocatedLead = (lead) => lead?.status === LEAD_STATUS.NEALOCAT && lead?.motivNeconfirmare === 'Timeout 6h';
+  const getLeadLastAssignedMentorId = (lead) => {
+    const historyMentors = Array.isArray(lead?.istoricMentori)
+      ? lead.istoricMentori.filter(Boolean)
+      : [];
+
+    if (lead?.mentorAlocat) return lead.mentorAlocat;
+    return historyMentors.length > 0 ? historyMentors[historyMentors.length - 1] : null;
+  };
+
+  const buildManualAllocationPlan = (mentorId, requestedCountValue, options = {}) => {
+    const includeSameMentorExpired = options.includeSameMentorExpired !== false;
+    const mentor = mentoriData.find(m => m.id === mentorId);
+    const currentLeadCount = Number(mentor?.leaduriAlocate || 0);
+    const availableSlots = Math.max(0, 30 - currentLeadCount);
+    const requested = Number.isFinite(Number(requestedCountValue)) && Number(requestedCountValue) > 0
+      ? Number(requestedCountValue)
+      : availableSlots;
+
+    const unallocatedLeads = leaduri.filter(l => l.status === LEAD_STATUS.NEALOCAT);
+    const expiredLeads = unallocatedLeads.filter(isExpiredUnallocatedLead);
+    const expiredFromSelectedMentor = expiredLeads.filter(lead => getLeadLastAssignedMentorId(lead) === mentorId);
+    const expiredFromOtherMentors = expiredLeads.filter(lead => getLeadLastAssignedMentorId(lead) !== mentorId);
+    const freshLeads = unallocatedLeads.filter(lead => !isExpiredUnallocatedLead(lead));
+
+    const orderedCandidates = includeSameMentorExpired
+      ? [...expiredFromSelectedMentor, ...expiredFromOtherMentors, ...freshLeads]
+      : [...expiredFromOtherMentors, ...freshLeads];
+
+    const allocateCount = Math.min(availableSlots, requested, orderedCandidates.length);
+    const selectedLeads = orderedCandidates.slice(0, allocateCount);
+    const expiredSelectedLeads = selectedLeads.filter(isExpiredUnallocatedLead);
+    const selectedSameMentorExpiredCount = expiredSelectedLeads.filter(lead => getLeadLastAssignedMentorId(lead) === mentorId).length;
+
+    return {
+      mentorId,
+      availableSlots,
+      requestedCount: Number.isFinite(Number(requestedCountValue)) && Number(requestedCountValue) > 0
+        ? Number(requestedCountValue)
+        : null,
+      totalUnallocatedCount: unallocatedLeads.length,
+      totalExpiredCount: expiredLeads.length,
+      sameMentorExpiredCount: expiredFromSelectedMentor.length,
+      otherExpiredCount: expiredFromOtherMentors.length,
+      freshCount: freshLeads.length,
+      candidateCount: orderedCandidates.length,
+      allocateCount,
+      prioritizedExpiredBatchCount: expiredSelectedLeads.length,
+      prioritizedSameMentorExpiredBatchCount: selectedSameMentorExpiredCount,
+      excludedSameMentorExpiredCount: includeSameMentorExpired ? 0 : expiredFromSelectedMentor.length,
+      includesSameMentorExpired: includeSameMentorExpired,
+      orderedLeadIds: orderedCandidates.map(lead => lead.id),
+      prioritizedLeadPreview: selectedLeads.slice(0, 5).map(lead => ({
+        id: lead.id,
+        nume: lead.nume || 'Lead',
+        isExpired: isExpiredUnallocatedLead(lead),
+        isSameMentorExpired: getLeadLastAssignedMentorId(lead) === mentorId,
+      })),
+    };
+  };
 
   const fetchMentori = async () => {
     try {
@@ -313,18 +387,33 @@ export default function Mentori1La20() {
       const { data: list, error: fetchErr } = await supabase
         .from("leaduri").select("*").order("createdAt", { ascending: false });
       if (fetchErr) throw fetchErr;
-      
-      // Batch-update all expired leads in one query
+
+      let syncedLeaduri = list || [];
+
+      // Expired leads must be released from their current mentor before any mentor/allocation recalculation.
       const expiredIds = (list || []).filter(lead => checkLeadTimeout(lead)).map(l => l.id);
       if (expiredIds.length > 0) {
-        await supabase.from("leaduri").update({
-          status: LEAD_STATUS.NECONFIRMAT, motivNeconfirmare: 'Timeout 6h', dataExpirare: new Date().toISOString()
-        }).in("id", expiredIds);
-        const { data: list2 } = await supabase
-          .from("leaduri").select("*").order("createdAt", { ascending: false });
-        setLeaduri(list2 || []);
-      } else { setLeaduri(list || []); }
-    } catch (err) { setError("Eroare la incarcarea leadurilor"); }
+        try {
+          await manageLeadAssignmentsAsAdmin({
+            action: 'sync_expired',
+            expiredLeadIds: expiredIds,
+          });
+
+          const { data: list2, error: refetchErr } = await supabase
+            .from("leaduri").select("*").order("createdAt", { ascending: false });
+          if (refetchErr) throw refetchErr;
+          syncedLeaduri = list2 || [];
+        } catch (syncErr) {
+          console.error('Eroare la sincronizarea leadurilor expirate:', syncErr);
+        }
+      }
+
+      setLeaduri(syncedLeaduri);
+      return syncedLeaduri;
+    } catch (err) {
+      setError("Eroare la incarcarea leadurilor");
+      return [];
+    }
   };
 
   const fetchAlocari = async () => {
@@ -339,7 +428,9 @@ export default function Mentori1La20() {
       
       for (const alocare of (alocariList || [])) {
         const leaduriReale = (toateLeadurile || []).filter(l => 
-          alocare.leaduri && alocare.leaduri.includes(l.id) && !isFinalizedProgramLead(l)
+          l.alocareId === alocare.id &&
+          l.mentorAlocat === alocare.mentorId &&
+          ACTIVE_PROGRAM_STATUSES.includes(l.status)
         );
         const numarRealDeLeaduri = leaduriReale.length;
         
@@ -388,8 +479,12 @@ export default function Mentori1La20() {
 
   const fetchAllData = useCallback(async () => {
     setLoadingData(true);
-    await Promise.all([fetchMentori(), fetchLeaduri(), fetchAlocari(), fetchEmailTemplate(), fetchVipEmailTemplate()]);
-    setLoadingData(false);
+    try {
+      await fetchLeaduri();
+      await Promise.all([fetchMentori(), fetchAlocari(), fetchEmailTemplate(), fetchVipEmailTemplate()]);
+    } finally {
+      setLoadingData(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readCachedUsersAccounts, writeCachedUsersAccounts]);
 
@@ -663,7 +758,7 @@ export default function Mentori1La20() {
     return result;
   };
 
-  const manageLeadAssignmentsAsAdmin = async ({ action, mentorId = null, requestedCount = null, leadId = null, isCurrentlyDisabled = null }) => {
+  const manageLeadAssignmentsAsAdmin = async ({ action, mentorId = null, requestedCount = null, leadId = null, isCurrentlyDisabled = null, candidateLeadIds = null, expiredLeadIds = null }) => {
     const token = localStorage.getItem('authToken');
     if (!token || !isTokenValid(token)) {
       throw new Error('Sesiune invalidă. Reautentifică-te.');
@@ -676,7 +771,7 @@ export default function Mentori1La20() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ action, mentorId, requestedCount, leadId, isCurrentlyDisabled }),
+      body: JSON.stringify({ action, mentorId, requestedCount, leadId, isCurrentlyDisabled, candidateLeadIds, expiredLeadIds }),
     }, ALLOCATION_REQUEST_TIMEOUT_MS);
 
     const result = await parseJsonResponse(response);
@@ -760,6 +855,7 @@ export default function Mentori1La20() {
             dataAlocare: da,
             dataTimeout: null,
             dataConfirmare: null,
+            motivNeconfirmare: null,
             numarReAlocari: (lead.numarReAlocari || 0) + 1,
             istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
             emailTrimis: false,
@@ -1038,52 +1134,22 @@ export default function Mentori1La20() {
     finally { setLoading(false); }
   };
 
-  const alocaLeaduriManual = async () => {
-    setLoading(true); setError(""); setSuccess("");
+  const executeManualAllocation = async (mentorEligibil, allocationPlan) => {
+    if (!allocationPlan || allocationPlan.allocateCount <= 0 || allocationPlan.orderedLeadIds.length === 0) {
+      setError('Nu exista leaduri eligibile pentru alocarea selectata');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
-      if (!manualAllocMentor) {
-        setError('Selecteaza un mentor');
-        setLoading(false);
-        return;
-      }
-
-      const nealoc = leaduri.filter(l => l.status === LEAD_STATUS.NEALOCAT);
-      if (nealoc.length === 0) {
-        setError('Nu exista leaduri nealocate');
-        setLoading(false);
-        return;
-      }
-
-      const mentorEligibil = mentoriData.find(m => m.id === manualAllocMentor);
-      if (!mentorEligibil) {
-        setError('Mentor invalid');
-        setLoading(false);
-        return;
-      }
-
-      if (!mentorEligibil.available) {
-        setError('Mentorul este în program activ și nu poate primi leaduri noi. Aşteață finalizarea programului curent.');
-        setLoading(false);
-        return;
-      }
-
-      const leadCntActual = mentorEligibil.leaduriAlocate || 0;
-      const spatDisponibil = 30 - leadCntActual;
-
-      if (spatDisponibil <= 0) {
-        setError('Mentorul selectat are deja 30 de leaduri (maxim)');
-        setLoading(false);
-        return;
-      }
-
-      const requestedCount = manualAllocCount && parseInt(manualAllocCount, 10) > 0
-        ? parseInt(manualAllocCount, 10)
-        : null;
-
       const result = await manageLeadAssignmentsAsAdmin({
         action: 'manual',
         mentorId: mentorEligibil.id,
-        requestedCount,
+        requestedCount: allocationPlan.requestedCount,
+        candidateLeadIds: allocationPlan.orderedLeadIds,
       });
 
       await fetchAllData();
@@ -1096,6 +1162,83 @@ export default function Mentori1La20() {
       setError("Eroare la alocarea manuala: " + (err.message || ""));
     }
     finally { setLoading(false); }
+  };
+
+  const alocaLeaduriManual = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!manualAllocMentor) {
+      setError('Selecteaza un mentor');
+      return;
+    }
+
+    const nealoc = leaduri.filter(l => l.status === LEAD_STATUS.NEALOCAT);
+    if (nealoc.length === 0) {
+      setError('Nu exista leaduri nealocate');
+      return;
+    }
+
+    const mentorEligibil = mentoriData.find(m => m.id === manualAllocMentor);
+    if (!mentorEligibil) {
+      setError('Mentor invalid');
+      return;
+    }
+
+    const leadCntActual = mentorEligibil.leaduriAlocate || 0;
+    const spatDisponibil = 30 - leadCntActual;
+
+    if (!mentorEligibil.available) {
+      // Mentor "în program" — poate primi DOAR propriile leaduri expirate
+      const ownExpiredLeads = leaduri.filter(
+        l => isExpiredUnallocatedLead(l) && getLeadLastAssignedMentorId(l) === manualAllocMentor
+      );
+      if (ownExpiredLeads.length === 0) {
+        setError('Mentorul este în program. Nu există leaduri expirate proprii de reallocat.');
+        return;
+      }
+      const requestedOwn = Number.isFinite(Number(manualAllocCount)) && Number(manualAllocCount) > 0 ? Number(manualAllocCount) : ownExpiredLeads.length;
+      const allocateOwnCount = Math.min(spatDisponibil, requestedOwn, ownExpiredLeads.length);
+      const ownExpiredPlan = {
+        mentorId: manualAllocMentor,
+        availableSlots: spatDisponibil,
+        requestedCount: Number.isFinite(Number(manualAllocCount)) && Number(manualAllocCount) > 0 ? Number(manualAllocCount) : null,
+        allocateCount: allocateOwnCount,
+        orderedLeadIds: ownExpiredLeads.map(l => l.id),
+      };
+      await executeManualAllocation(mentorEligibil, ownExpiredPlan);
+      return;
+    }
+
+    if (spatDisponibil <= 0) {
+      setError('Mentorul selectat are deja 30 de leaduri (maxim)');
+      return;
+    }
+
+    const allocationPlan = buildManualAllocationPlan(manualAllocMentor, manualAllocCount, { includeSameMentorExpired: true });
+    if (allocationPlan.allocateCount <= 0) {
+      setError('Nu exista leaduri eligibile pentru alocare');
+      return;
+    }
+
+    if (allocationPlan.prioritizedSameMentorExpiredBatchCount > 0) {
+      showConfirmDialog(
+        'Leaduri expirate de la acest mentor',
+        `${allocationPlan.prioritizedSameMentorExpiredBatchCount} leaduri care au expirat anterior de la mentorul selectat vor intra primele la alocare. Vrei sa le trimiti din nou catre acelasi mentor?`,
+        () => executeManualAllocation(mentorEligibil, allocationPlan),
+        {
+          confirmLabel: 'Da, realoca-le',
+          cancelLabel: 'Nu, exclude-le',
+          onCancel: () => {
+            const alternativePlan = buildManualAllocationPlan(manualAllocMentor, manualAllocCount, { includeSameMentorExpired: false });
+            executeManualAllocation(mentorEligibil, alternativePlan);
+          },
+        }
+      );
+      return;
+    }
+
+    await executeManualAllocation(mentorEligibil, allocationPlan);
   };
 
   const toggleMentorAvailability = async (mentorId, isCurrentlyDisabled) => {
@@ -1634,6 +1777,7 @@ export default function Mentori1La20() {
           dataAlocare: da, 
           dataTimeout: null,
           dataConfirmare: null, 
+          motivNeconfirmare: null,
           numarReAlocari: (lead.numarReAlocari || 0) + 1,
           istoricMentori: [...(lead.istoricMentori || []), mentorNou.id],
           emailTrimis: false
@@ -1852,6 +1996,65 @@ export default function Mentori1La20() {
 
   const handleCancelEdit = () => { setEditingLead(null); setEditLeadData({ nume: '', telefon: '', email: '', status: '' }); };
 
+  const handleAssignLeadToMentor = async (leadId, targetMentorId) => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+    try {
+      const lead = leaduri.find(l => l.id === leadId);
+      if (!lead) { setError('Lead negasit'); return; }
+
+      const targetMentor = mentoriData.find(m => m.id === targetMentorId);
+      if (!targetMentor) { setError('Mentor negasit'); return; }
+
+      const oldMentorId = lead.mentorAlocat;
+
+      // Remove lead from old mentor if different
+      if (oldMentorId && oldMentorId !== targetMentorId) {
+        const oldMentor = mentoriData.find(m => m.id === oldMentorId);
+        if (oldMentor) {
+          await supabase.from('mentori').update({ leaduriAlocate: Math.max(0, (oldMentor.leaduriAlocate || 1) - 1) }).eq('id', oldMentorId);
+        }
+        if (lead.alocareId) {
+          const { data: allocation } = await supabase.from('alocari').select('id, leaduri').eq('id', lead.alocareId).maybeSingle();
+          if (allocation) {
+            const remaining = (allocation.leaduri || []).filter(id => id !== leadId);
+            if (remaining.length === 0) {
+              await supabase.from('alocari').delete().eq('id', lead.alocareId);
+            } else {
+              await supabase.from('alocari').update({ numarLeaduri: remaining.length, leaduri: remaining, ultimaActualizare: new Date().toISOString() }).eq('id', lead.alocareId);
+            }
+          }
+        }
+      }
+
+      const newHistory = [...(lead.istoricMentori || []).filter(Boolean)];
+      if (newHistory[newHistory.length - 1] !== targetMentorId) newHistory.push(targetMentorId);
+
+      await supabase.from('leaduri').update({
+        status: LEAD_STATUS.ALOCAT,
+        mentorAlocat: targetMentorId,
+        alocareId: null,
+        dataAlocare: new Date().toISOString(),
+        dataTimeout: null,
+        dataConfirmare: null,
+        motivNeconfirmare: null,
+        emailTrimis: false,
+        numarReAlocari: (lead.numarReAlocari || 0) + (oldMentorId && oldMentorId !== targetMentorId ? 1 : 0),
+        istoricMentori: newHistory,
+      }).eq('id', leadId);
+
+      await supabase.from('mentori').update({ leaduriAlocate: (targetMentor.leaduriAlocate || 0) + 1 }).eq('id', targetMentorId);
+
+      await fetchAllData();
+      setSuccess(`Lead-ul "${lead.nume}" a fost atribuit lui ${targetMentor.nume}!`);
+    } catch (err) {
+      setError('Eroare la atribuirea leadului: ' + (err.message || ''));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteLead = (lead) => {
     showConfirmDialog("Stergere Lead", 'Stergi leadul "' + lead.nume + '"?', async () => {
       setLoading(true);
@@ -1971,10 +2174,19 @@ export default function Mentori1La20() {
   const mentoriUnici = MENTORI_DISPONIBILI.map(mentorDef => {
     const mentorDB = mentoriData.find(m => m.id === mentorDef.id);
     const leaduriRealeMentor = leaduri.filter(l => l.mentorAlocat === mentorDef.id && !isFinalizedProgramLead(l)).length;
+    const isManuallyDisabled = mentorDB?.manuallyDisabled === true;
+    const hasProgramActiv = leaduri.some(l =>
+      l.mentorAlocat === mentorDef.id && (
+        [LEAD_STATUS.CONFIRMAT, LEAD_STATUS.NECONFIRMAT, LEAD_STATUS.IN_PROGRAM].includes(l.status) ||
+        (l.status === LEAD_STATUS.ALOCAT && l.emailTrimis === true)
+      )
+    );
+    const isFull = leaduriRealeMentor >= 30;
+    const computedAvailable = !isManuallyDisabled && !hasProgramActiv && !isFull;
     return {
       id: mentorDef.id, nume: mentorDef.nume,
-      available: mentorDB?.available ?? true,
-      manuallyDisabled: mentorDB?.manuallyDisabled ?? false,
+      available: computedAvailable,
+      manuallyDisabled: isManuallyDisabled,
       ultimulOneToTwenty: mentorDB?.ultimulOneToTwenty ?? null,
       webinar2Date: mentorDB?.webinar2Date ?? null,
       webinar3Date: mentorDB?.webinar3Date ?? null,
@@ -2004,6 +2216,15 @@ export default function Mentori1La20() {
     })
     .filter(a => a !== null);
 
+  const manualExpiredLeadCountTotal = leaduri.filter(isExpiredUnallocatedLead).length;
+  const manualExpiredCountsByMentor = MENTORI_DISPONIBILI.reduce((acc, mentor) => {
+    acc[mentor.id] = leaduri.filter(lead => isExpiredUnallocatedLead(lead) && getLeadLastAssignedMentorId(lead) === mentor.id).length;
+    return acc;
+  }, {});
+  const manualAllocPreview = manualAllocMentor
+    ? buildManualAllocationPlan(manualAllocMentor, manualAllocCount, { includeSameMentorExpired: true })
+    : null;
+
   // ==================== RENDER ====================
   if (currentRole === "admin") {
     return (
@@ -2025,6 +2246,9 @@ export default function Mentori1La20() {
         showManualAllocModal={showManualAllocModal} setShowManualAllocModal={setShowManualAllocModal}
         manualAllocMentor={manualAllocMentor} setManualAllocMentor={setManualAllocMentor}
         manualAllocCount={manualAllocCount} setManualAllocCount={setManualAllocCount}
+        manualAllocPreview={manualAllocPreview}
+        manualExpiredLeadCountTotal={manualExpiredLeadCountTotal}
+        manualExpiredCountsByMentor={manualExpiredCountsByMentor}
         stergeLeaduri={stergeLeaduri} exportToExcel={exportToExcel}
         dezalocaLeaduriMentor={dezalocaLeaduriMentor} dezalocaLeadSingular={dezalocaLeadSingular} stergeLeaduriMentor={stergeLeaduriMentor}
         selectedMentor={selectedMentor} setSelectedMentor={setSelectedMentor}
@@ -2035,7 +2259,7 @@ export default function Mentori1La20() {
         manualLead={manualLead} setManualLead={setManualLead} handleAddManualLead={handleAddManualLead}
         editingLead={editingLead} editLeadData={editLeadData} setEditLeadData={setEditLeadData}
         handleEditLead={handleEditLead} handleSaveEditLead={handleSaveEditLead} handleCancelEdit={handleCancelEdit}
-        handleReallocateLead={handleReallocateLead} handleDeleteLead={handleDeleteLead}
+        handleReallocateLead={handleReallocateLead} handleDeleteLead={handleDeleteLead} handleAssignLeadToMentor={handleAssignLeadToMentor}
         showDateModal={showDateModal} manualDate={manualDate} setManualDate={setManualDate}
         manualDate2={manualDate2} setManualDate2={setManualDate2}
         manualDate3={manualDate3} setManualDate3={setManualDate3}
@@ -2061,7 +2285,7 @@ export default function Mentori1La20() {
         fetchUsersAccounts={fetchUsersAccounts}
         updateUserCredentials={updateUserCredentials}
         resetUserPasswordByAdmin={resetUserPasswordByAdmin}
-        showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
+        showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm} handleModalCancel={handleModalCancel}
       />
     );
   }
@@ -2094,7 +2318,7 @@ export default function Mentori1La20() {
       manualDate3={manualDate3} setManualDate3={setManualDate3}
       handleConfirmDate={handleConfirmDate} handleResetDateSchedule={handleResetDateSchedule} setShowDateModal={setShowDateModal}
       selectedMentorForDate={selectedMentorForDate} setSelectedMentorForDate={setSelectedMentorForDate}
-      showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm}
+      showModal={showModal} modalConfig={modalConfig} closeModal={closeModal} handleModalConfirm={handleModalConfirm} handleModalCancel={handleModalCancel}
     />
   );
 }

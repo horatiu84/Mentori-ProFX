@@ -33,6 +33,42 @@ const ACTIVE_PROGRAM_STATUSES = new Set([
   LEAD_STATUS.IN_PROGRAM,
 ]);
 
+const isExpiredUnallocatedLead = (lead: Record<string, unknown>) => (
+  String(lead.status || "") === LEAD_STATUS.NEALOCAT && String(lead.motivNeconfirmare || "") === "Timeout 6h"
+);
+
+const getLeadLastAssignedMentorId = (lead: Record<string, unknown>) => {
+  const history = Array.isArray(lead.istoricMentori)
+    ? lead.istoricMentori.filter(Boolean)
+    : [];
+
+  if (lead.mentorAlocat) return String(lead.mentorAlocat);
+  return history.length > 0 ? String(history[history.length - 1]) : null;
+};
+
+const orderManualCandidateLeads = (
+  unallocatedLeads: Array<Record<string, unknown>>,
+  candidateLeadIds: unknown
+) => {
+  if (!Array.isArray(candidateLeadIds) || candidateLeadIds.length === 0) {
+    return unallocatedLeads;
+  }
+
+  const leadById = new Map(unallocatedLeads.map((lead) => [String(lead.id), lead]));
+  const ordered: Array<Record<string, unknown>> = [];
+  const seenLeadIds = new Set<string>();
+
+  for (const rawId of candidateLeadIds) {
+    const leadId = String(rawId || "");
+    const lead = leadById.get(leadId);
+    if (!lead || seenLeadIds.has(leadId)) continue;
+    ordered.push(lead);
+    seenLeadIds.add(leadId);
+  }
+
+  return ordered;
+};
+
 const getCorsHeaders = (req: Request) => {
   const origin = req.headers.get("origin") || "";
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -192,7 +228,8 @@ const removeLeadFromAllocation = async (
 
 const resetLeadAssignment = async (
   supabase: ReturnType<typeof createAdminClient>,
-  leadId: string
+  leadId: string,
+  options: { motivNeconfirmare?: string | null } = {}
 ) => {
   const { error: leadUpdateError } = await supabase
     .from("leaduri")
@@ -204,6 +241,7 @@ const resetLeadAssignment = async (
       dataConfirmare: null,
       emailTrimis: false,
       alocareId: null,
+      motivNeconfirmare: options.motivNeconfirmare ?? null,
     })
     .eq("id", leadId);
 
@@ -238,6 +276,48 @@ const deallocateSingleLead = async (
   return {
     leadName: String(lead.nume || "Lead"),
     mentorId: lead.mentorAlocat ? String(lead.mentorAlocat) : null,
+  };
+};
+
+const syncExpiredLeads = async (
+  supabase: ReturnType<typeof createAdminClient>,
+  expiredLeadIds: string[]
+) => {
+  if (!Array.isArray(expiredLeadIds) || expiredLeadIds.length === 0) {
+    return { releasedCount: 0, affectedMentorIds: [] };
+  }
+
+  const { data: expiredLeads, error: expiredLeadsError } = await supabase
+    .from("leaduri")
+    .select("id, mentorAlocat, alocareId")
+    .in("id", expiredLeadIds);
+
+  if (expiredLeadsError) throw expiredLeadsError;
+
+  const affectedMentorIds = new Set<string>();
+
+  for (const lead of (expiredLeads || [])) {
+    const leadId = String(lead.id || "");
+    if (!leadId) continue;
+
+    if (lead.alocareId) {
+      await removeLeadFromAllocation(supabase, String(lead.alocareId), leadId);
+    }
+
+    await resetLeadAssignment(supabase, leadId, { motivNeconfirmare: "Timeout 6h" });
+
+    if (lead.mentorAlocat) {
+      affectedMentorIds.add(String(lead.mentorAlocat));
+    }
+  }
+
+  for (const mentorId of affectedMentorIds) {
+    await syncMentorState(supabase, mentorId);
+  }
+
+  return {
+    releasedCount: (expiredLeads || []).length,
+    affectedMentorIds: Array.from(affectedMentorIds),
   };
 };
 
@@ -418,6 +498,7 @@ const allocateBatchToMentor = async (
         dataAlocare: allocationTime,
         dataTimeout: null,
         emailTrimis: false,
+        motivNeconfirmare: null,
         istoricMentori: nextHistory,
         numarReAlocari: Number(lead.numarReAlocari || 0),
       })
@@ -465,8 +546,21 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { action, mentorId, requestedCount, leadId, isCurrentlyDisabled } = await req.json();
+    const { action, mentorId, requestedCount, leadId, isCurrentlyDisabled, candidateLeadIds, expiredLeadIds } = await req.json();
     const supabase = createAdminClient();
+
+    if (action === "sync_expired") {
+      const normalizedExpiredLeadIds = Array.isArray(expiredLeadIds)
+        ? expiredLeadIds.map((id) => String(id || "")).filter(Boolean)
+        : [];
+
+      const result = await syncExpiredLeads(supabase, normalizedExpiredLeadIds);
+      return jsonResponse(req, 200, {
+        success: true,
+        ...result,
+        message: `${result.releasedCount} leaduri expirate au fost eliberate automat.`,
+      });
+    }
 
     if (action === "deallocate_single") {
       if (!leadId || typeof leadId !== "string") {
@@ -509,7 +603,7 @@ serve(async (req: Request) => {
 
     const { data: unallocatedLeads, error: leadsError } = await supabase
       .from("leaduri")
-      .select("id, istoricMentori, numarReAlocari")
+      .select("id, nume, status, mentorAlocat, istoricMentori, numarReAlocari, motivNeconfirmare")
       .eq("status", LEAD_STATUS.NEALOCAT)
       .order("createdAt", { ascending: true });
 
@@ -540,7 +634,7 @@ serve(async (req: Request) => {
         return jsonResponse(req, 404, { error: "Mentor invalid" });
       }
 
-      if (!mentor.available || mentor.manuallyDisabled) {
+      if (mentor.manuallyDisabled) {
         return jsonResponse(req, 400, { error: "Mentorul selectat nu poate primi leaduri noi" });
       }
 
@@ -554,15 +648,39 @@ serve(async (req: Request) => {
         ? Number(requestedCount)
         : availableSlots;
 
-      const allocateCount = Math.min(requested, availableSlots, unallocatedLeads.length);
-      const leadBatch = unallocatedLeads.slice(0, allocateCount);
+      const manualCandidateLeads = orderManualCandidateLeads(unallocatedLeads, candidateLeadIds);
+      if (manualCandidateLeads.length === 0) {
+        return jsonResponse(req, 400, { error: "Nu exista leaduri eligibile pentru alocarea selectata" });
+      }
+
+      const allocateCount = Math.min(requested, availableSlots, manualCandidateLeads.length);
+      const leadBatch = manualCandidateLeads.slice(0, allocateCount);
+
+      // Mentorul in program (available=false) poate primi DOAR propriile leaduri expirate, manual
+      if (!mentor.available) {
+        const allOwnExpired = leadBatch.every(lead =>
+          isExpiredUnallocatedLead(lead) && getLeadLastAssignedMentorId(lead) === mentorId
+        );
+        if (!allOwnExpired) {
+          return jsonResponse(req, 400, { error: "Mentorul este in program. Pot fi alocate manual doar propriile leaduri expirate (Timeout 6h)." });
+        }
+      }
       const result = await allocateBatchToMentor(supabase, mentor, leadBatch);
+      const expiredAllocatedCount = leadBatch.filter(isExpiredUnallocatedLead).length;
+      const sameMentorExpiredAllocatedCount = leadBatch.filter((lead) => (
+        isExpiredUnallocatedLead(lead) && getLeadLastAssignedMentorId(lead) === mentor.id
+      )).length;
+      const priorityMessage = expiredAllocatedCount > 0
+        ? ` Prioritate expirate: ${expiredAllocatedCount}${sameMentorExpiredAllocatedCount > 0 ? `, dintre care ${sameMentorExpiredAllocatedCount} revenite la acelasi mentor` : ""}.`
+        : "";
 
       return jsonResponse(req, 200, {
         success: true,
         ...result,
         remainingUnallocated: unallocatedLeads.length - allocateCount,
-        message: `Alocate manual ${allocateCount} leaduri catre ${result.mentorName}! Total mentor: ${result.totalLeadCount}/30. Nealocate: ${unallocatedLeads.length - allocateCount}`,
+        expiredAllocatedCount,
+        sameMentorExpiredAllocatedCount,
+        message: `Alocate manual ${allocateCount} leaduri catre ${result.mentorName}! Total mentor: ${result.totalLeadCount}/30. Nealocate: ${unallocatedLeads.length - allocateCount}.${priorityMessage}`,
       });
     }
 
