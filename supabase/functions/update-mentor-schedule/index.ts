@@ -18,6 +18,8 @@ const ALLOWED_ORIGINS = [
   "http://localhost:4173",
 ];
 
+const APP_TIME_ZONE = "Europe/Bucharest";
+
 const getCorsHeaders = (req: Request) => {
   const origin = req.headers.get("origin") || "";
   const allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
@@ -38,13 +40,76 @@ const jsonResponse = (req: Request, status: number, payload: Record<string, unkn
   });
 };
 
+const getTimeZoneParts = (date: Date, timeZone = APP_TIME_ZONE) => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  });
+
+  return formatter.formatToParts(date).reduce<Record<string, string>>((parts, part) => {
+    if (part.type !== "literal") {
+      parts[part.type] = part.value;
+    }
+    return parts;
+  }, {});
+};
+
+const getTimeZoneOffsetMs = (date: Date, timeZone = APP_TIME_ZONE) => {
+  const parts = getTimeZoneParts(date, timeZone);
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second),
+  );
+
+  return asUtc - date.getTime();
+};
+
+const resolveDateTimeLocalInTimeZone = (value: string, timeZone = APP_TIME_ZONE) => {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  const utcGuess = new Date(Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  ));
+
+  const initialOffsetMs = getTimeZoneOffsetMs(utcGuess, timeZone);
+  const initialDate = new Date(utcGuess.getTime() - initialOffsetMs);
+  const resolvedOffsetMs = getTimeZoneOffsetMs(initialDate, timeZone);
+
+  return new Date(utcGuess.getTime() - resolvedOffsetMs);
+};
+
+const hasExplicitTimeZone = (value: string) => /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(value.trim());
+
 const parseDate = (value: unknown) => {
   if (!value) return null;
   if (typeof value !== "string") {
     throw new Error("Invalid date format");
   }
 
-  const parsed = new Date(value);
+  const normalizedValue = value.trim();
+  if (!normalizedValue) return null;
+
+  const parsed = hasExplicitTimeZone(normalizedValue)
+    ? new Date(normalizedValue)
+    : (resolveDateTimeLocalInTimeZone(normalizedValue) ?? new Date(normalizedValue));
+
   if (Number.isNaN(parsed.getTime())) {
     throw new Error("Invalid date format");
   }

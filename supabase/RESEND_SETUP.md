@@ -1,99 +1,73 @@
-# Ghid Rapid: Obținere RESEND_API_KEY
+# Configurare Resend
 
-## Pașii pentru configurarea Resend.com
+Acest proiect foloseste Resend pentru emailurile de invitatie si pentru campania VIP.
 
-### 1. Creează un cont Resend (GRATUIT)
+## 1. Creeaza cheia API
 
-Accesează: https://resend.com/signup
+1. Intra in https://resend.com/api-keys
+2. Creeaza un API key cu permisiune de trimitere
+3. Copiaza cheia generata
 
-**Plan gratuit include:**
-- 100 emailuri/zi
-- 3,000 emailuri/lună
-- Perfect pentru testare și proiecte mici! 🎉
+Cheia are forma:
 
-### 2. Verifică email-ul
+```text
+re_xxxxxxxxxxxxxxxxxxxxxxxxx
+```
 
-După înregistrare, verifică adresa de email pentru a activa contul.
-
-### 3. Obține API Key
-
-1. După login, vei fi pe dashboard
-2. Click pe **API Keys** în sidebar (sau direct: https://resend.com/api-keys)
-3. Click pe **Create API Key**
-4. Dă-i un nume (ex: "ProFX Mentori Production")
-5. Selectează permisiuni: **Sending access** (implicit)
-6. Click **Add**
-7. **IMPORTANT:** Copiază cheia și salvează-o undeva sigur! Nu va mai fi afișată din nou!
-
-Cheia arată așa: `re_123abc456def789ghi012jkl345mno`
-
-### 4. Setează cheia în Supabase
+## 2. Salveaza cheia in Supabase
 
 ```bash
-npx supabase secrets set RESEND_API_KEY=re_123abc456def789ghi012jkl345mno
+npx supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### 5. Test email-ul (Opțional dar recomandat)
+## 3. Configureaza domeniul de trimitere
 
-După ce ai deploiat funcțiile, poți testa:
+In cod, emailurile actuale folosesc adrese de forma:
 
-```bash
-curl -X POST https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/send-email \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer SUPABASE_ANON_KEY" \
-  -d '{"leadId": "test-id", "mentorId": "sergiu"}'
+- `noreply@webinar.profx.ro`
+- `support@profx.ro` pentru reply-to
+
+Pentru productie, domeniul trebuie verificat in Resend Dashboard -> Domains.
+
+DNS minim recomandat:
+
+```text
+SPF:   v=spf1 include:_spf.resend.com ~all
+DKIM:  resend._domainkey -> resend._domainkey.resend.com
+DMARC: v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@profx.ro; pct=100
 ```
 
-## Email de test vs Email production
+## 4. Cum foloseste aplicatia Resend
 
-### Pentru dezvoltare (ce folosim acum):
-```javascript
-from: "ProFX Mentori <onboarding@resend.dev>"
-```
-- Funcționează imediat, fără configurare domeniu
-- Perfect pentru testing
-- Limitare: 100 emailuri/zi în plan gratuit
+- `send-email` - trimite un email catre un singur lead si genereaza tokenul de confirmare
+- `send-bulk-emails` - trimite emailuri tuturor leadurilor active ale unui mentor
+- `send-vip-emails` - trimite emailul VIP absolventilor
 
-### Pentru producție (recomandat):
-```javascript
-from: "ProFX Mentori <mentori@profx.ro>"
-```
+Toate aceste functii citesc template-urile din tabela `settings`.
 
-**Pași pentru email custom:**
-1. În Resend Dashboard → **Domains**
-2. Click **Add Domain**
-3. Introdu domeniul tău (ex: `profx.ro`)
-4. Adaugă DNS records în configurația domeniului tău:
-   - TXT record pentru SPF
-   - CNAME records pentru DKIM
-5. Așteaptă verificare (~10 minute - câteva ore)
-6. După verificare, schimbă `from` în cod
+## 5. Recomandare de test
 
-**Verificare domeniu:**
-```
-SPF: v=spf1 include:_spf.resend.com ~all
-DKIM: resend._domainkey IN CNAME resend._domainkey.resend.com
-```
+Inainte de o trimitere reala:
 
-## Link-uri utile
+1. creeaza un lead de test
+2. trimite un email singular din dashboard
+3. verifica inbox, spam si linkul de confirmare
+4. testeaza apoi un batch mic de 3-5 leaduri
 
-- 📧 Resend Dashboard: https://resend.com/home
-- 🔑 API Keys: https://resend.com/api-keys
-- 🌐 Domenii: https://resend.com/domains
-- 📊 Logs: https://resend.com/emails
-- 📖 Documentație: https://resend.com/docs/introduction
+## 6. Troubleshooting
 
-## Troubleshooting
+### `API key is invalid`
+Verifica valoarea salvata in `RESEND_API_KEY`.
 
-**Eroare: "API key is invalid"**
-- Verifică că ai copiat corect cheia (inclusiv prefixul `re_`)
-- Asigură-te că nu ai spații înainte/după cheie
+### Email trimis dar nu ajunge
+Verifica Resend Logs, folderul Spam si configurarea SPF / DKIM / DMARC.
 
-**Emailurile nu ajung**
-- Verifică în Resend Logs dacă emailul a fost trimis
-- Caută în spam/junk
-- Pentru `onboarding@resend.dev`, emailurile merg doar pe adrese reale (nu temporary email)
+### Confirm link invalid
+Verifica daca functia de email a scris `confirmationToken` si `dataTimeout` in tabela `leaduri`.
 
-**Limita de 100 emailuri/zi depășită**
-- Upgrade la plan plătit (de la $20/lună pentru 50,000 emailuri)
-- Sau folosește mai multe API keys pentru medii diferite (dev/staging/prod)
+## Linkuri utile
+
+- https://resend.com/home
+- https://resend.com/domains
+- https://resend.com/emails
+- https://resend.com/docs

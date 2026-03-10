@@ -15,6 +15,93 @@ export const formatDate = (val) => {
   }
 };
 
+export const APP_TIME_ZONE = 'Europe/Bucharest';
+
+const getTimeZoneParts = (date, timeZone = APP_TIME_ZONE) => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  });
+
+  return formatter.formatToParts(date).reduce((parts, part) => {
+    if (part.type !== 'literal') {
+      parts[part.type] = part.value;
+    }
+    return parts;
+  }, {});
+};
+
+const getTimeZoneOffsetMs = (date, timeZone = APP_TIME_ZONE) => {
+  const parts = getTimeZoneParts(date, timeZone);
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+
+  return asUtc - date.getTime();
+};
+
+const resolveDateTimeLocalInTimeZone = (value, timeZone = APP_TIME_ZONE) => {
+  const match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute] = match;
+  const utcGuess = new Date(Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    0
+  ));
+
+  const initialOffsetMs = getTimeZoneOffsetMs(utcGuess, timeZone);
+  const initialDate = new Date(utcGuess.getTime() - initialOffsetMs);
+  const resolvedOffsetMs = getTimeZoneOffsetMs(initialDate, timeZone);
+
+  return new Date(utcGuess.getTime() - resolvedOffsetMs);
+};
+
+export const dateTimeLocalToUtcIso = (value, timeZone = APP_TIME_ZONE) => {
+  if (!value) return null;
+
+  try {
+    const resolvedDate = resolveDateTimeLocalInTimeZone(value, timeZone);
+    if (resolvedDate) {
+      return resolvedDate.toISOString();
+    }
+
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+  } catch {
+    return null;
+  }
+};
+
+export const toDateTimeLocalValue = (value, timeZone = APP_TIME_ZONE) => {
+  if (!value) return '';
+
+  try {
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return '';
+
+    const parts = getTimeZoneParts(parsed, timeZone);
+    return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+  } catch {
+    return '';
+  }
+};
+
 export const MENTORI_DISPONIBILI = [
   { id: 'sergiu', nume: 'Sergiu' },
   { id: 'eli', nume: 'Eli' },

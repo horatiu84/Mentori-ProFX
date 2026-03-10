@@ -1,149 +1,134 @@
-# 🚀 Quick Start Guide - ProFx Webinarii
+# Quick Start
 
-## 📦 Setup în 5 minute
+Ghid minim pentru a porni proiectul local pe stack-ul actual: Vite + Supabase + Edge Functions + Resend.
 
-### 1. Instalează dependințele
+## 1. Cerinte
+
+- Node.js 20+
+- npm
+- Supabase project existent sau `supabase start` pentru mediu local
+- Supabase CLI daca vrei sa rulezi / deploiezi functiile
+
+## 2. Configureaza mediul frontend
+
+1. Copiaza `.env.example` in `.env`
+2. Completeaza variabilele:
+
+```bash
+VITE_SUPABASE_URL=https://PROJECT_REF.supabase.co
+VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY=eyJ...
+```
+
+Acestea se gasesc in Supabase Dashboard -> Project Settings -> API.
+
+## 3. Instaleaza dependintele
+
 ```bash
 npm install
 ```
 
-### 2. Configurează Firebase
-1. Mergi la [Firebase Console](https://console.firebase.google.com/)
-2. Creează un proiect nou sau folosește unul existent
-3. Activează **Firestore Database**
-4. Copiază configurația din **Project Settings → Your Apps → Web**
-5. Configurația este deja în `src/firebase.js` - nu e nevoie să o modifici dacă folosești proiectul existent
+## 4. Initializeaza baza de date
 
-### 3. Configurează Security Rules (Important!)
+Pentru o instalare noua, ruleaza in Supabase SQL Editor, in aceasta ordine:
 
-În Firebase Console → Firestore Database → Rules, adaugă:
+1. `supabase-schema.sql`
+2. `supabase-security-fix.sql`
+3. `supabase-auth-rpc.sql`
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{document=**} {
-      allow read: if true;
-      allow write: if true;  // Pentru development
-    }
-  }
-}
+Pentru upgrade-uri din versiuni mai vechi:
+
+- `supabase-password-hash-migration.sql` daca ai utilizatori cu parole plaintext
+- `supabase-session-3-migration.sql` daca instanta veche nu are coloanele pentru sesiunea 3
+- `supabase-lead-email-unique.sql` daca instanta veche nu are indexul unic pe email normalizat
+
+## 5. Configureaza secretele pentru Edge Functions
+
+Seteaza in Supabase urmatoarele secrete:
+
+```bash
+npx supabase secrets set AUTH_JWT_SECRET=your-long-random-secret
+npx supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
 ```
 
-⚠️ **Atenție**: Aceste reguli sunt permisive. Pentru producție, vezi `firestore.rules`.
+`SUPABASE_URL` si `SUPABASE_SERVICE_ROLE_KEY` sunt disponibile automat in mediul hostat Supabase.
 
-### 4. Pornește aplicația
+Important:
+
+- `AUTH_JWT_SECRET` trebuie sa fie acelasi secret folosit pentru validarea JWT-urilor aplicatiei
+- fara `RESEND_API_KEY`, functiile de email nu vor putea trimite mesaje
+
+## 6. Deploiaza Edge Functions
+
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
+npx supabase functions deploy authenticate
+npx supabase functions deploy manage-users
+npx supabase functions deploy reset-password
+npx supabase functions deploy send-email
+npx supabase functions deploy send-bulk-emails
+npx supabase functions deploy send-vip-emails
+npx supabase functions deploy delete-leads
+npx supabase functions deploy update-mentor-schedule
+npx supabase functions deploy allocate-leads
+npx supabase functions deploy update-lead-attendance
+npx supabase functions deploy update-lead
+npx supabase functions deploy manage-email-templates
+```
+
+Alternativ, pentru dezvoltare locala:
+
+```bash
+npx supabase start
+npx supabase functions serve
+```
+
+## 7. Porneste frontend-ul
+
 ```bash
 npm run dev
 ```
 
-### 5. Rulează migrarea datelor
-1. Deschide browser la `http://localhost:5173/migrate`
-2. Click pe **"🚀 Rulează Migrare Completă"**
-3. Așteaptă confirmarea în console
-4. Gata! Datele sunt în Firebase
+Aplicatia va fi disponibila implicit la `http://localhost:5173`.
 
-## 🎯 Ce face migrarea?
+## 8. Rute de verificare
 
-✅ **Creează 5 mentori**: Sergiu, Dan, Tudor, Eli, Adrian  
-✅ **Creează 1 clasă** cu 5 studenți demonstrativi  
-
-## 📱 Pagini disponibile
-
-```
-http://localhost:5173/          → Pagina principală
-http://localhost:5173/admin     → Panou administrare
-http://localhost:5173/migrate   → Asistent migrare date
+```text
+http://localhost:5173/                -> formular public
+http://localhost:5173/login           -> login admin / mentor
+http://localhost:5173/admin           -> dashboard protejat
+http://localhost:5173/confirm/<token> -> confirmare lead din email
 ```
 
-## 🎓 Acțiuni comune
+## 9. Utilizatori initiali
 
-### Adaugă un mentor nou
-```javascript
-import { saveMentor } from './services/firebaseService';
+`supabase-schema.sql` creeaza automat utilizatori initiali
 
-await saveMentor("cristian", {
-  name: "Cristian",
-  email: "cristian@example.com",
-  password: "Cristian",
-  active: true
-});
-```
 
-### Creează o clasă nouă
-```javascript
-import { createCompleteClass } from './services/adminService';
+## 10. Verificare rapida
 
-const result = await createCompleteClass({
-  name: "Clasa Q2 2025",
-  startDate: "2025-04-01",
-  endDate: "2025-06-30",
-  students: [
-    { name: "Student 1", email: "s1@example.com" },
-    { name: "Student 2", email: "s2@example.com" }
-  ]
-});
+- Formularul public poate insera leaduri noi
+- Login-ul functioneaza prin `authenticate`
+- Dashboard-ul incarca mentori, leaduri si alocari
+- Template-urile email pot fi citite / salvate
+- Trimiterea unui email de test functioneaza prin Resend
 
-console.log("Clasă creată:", result.classId);
-```
+## Probleme comune
 
-## 📊 Verifică datele în Firebase Console
+### Frontend-ul afiseaza `Missing Supabase environment variables`
+Completeaza `.env` cu `VITE_SUPABASE_URL` si `VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY`.
 
-1. Mergi la [Firebase Console](https://console.firebase.google.com/)
-2. Click pe proiectul tău
-3. Firestore Database
-4. Vei vedea colecțiile:
-   - `mentori` (5 documente)
-   - `clase` (1+ documente)
-   - `studenti` (5+ documente)
+### Login-ul returneaza `Auth misconfiguration`
+Verifica secretele `AUTH_JWT_SECRET`, `SUPABASE_URL` si `SUPABASE_SERVICE_ROLE_KEY` in Edge Functions.
 
-## 🆘 Probleme Comune
+### Emailurile nu se trimit
+Verifica `RESEND_API_KEY`, domeniul verificat in Resend si ghidul din [supabase/RESEND_SETUP.md](supabase/RESEND_SETUP.md).
 
-### "Permission denied" când salvezi date
-**Soluție**: Verifică Security Rules în Firebase Console.
+### Confirmarea din email nu functioneaza
+Verifica faptul ca emailul a setat `confirmationToken` si ca leadul este in status `alocat`.
 
-### "Module not found"
-**Soluție**: Rulează `npm install` din nou.
+## Documente de continuare
 
-### Pagina /admin nu se încarcă
-**Soluție**: Asigură-te că `react-router-dom` este instalat.
-
-### Datele nu apar
-**Soluție**: Verifică că ai rulat migrarea la `/migrate`.
-
-## 📚 Documentație Completă
-
-Pentru mai multe detalii, vezi:
-- [FIREBASE_GUIDE.md](FIREBASE_GUIDE.md) - Ghid complet Firebase
-- [README.md](README.md) - Documentație generală
-- [src/examples/usageExamples.js](src/examples/usageExamples.js) - 25+ exemple de cod
-
-## 🎨 Personalizare
-
-### Adaugă mentori noi
-Folosește panoul admin la `/admin` sau prin cod:
-```javascript
-import { saveMentor } from './services/firebaseService';
-
-await saveMentor("cristian", {
-  name: "Cristian",
-  password: "Cristian",
-  active: true
-});
-```
-
-## ✅ Checklist Final
-
-- [ ] Firebase configurat
-- [ ] npm install executat
-- [ ] Security Rules configurate
-- [ ] npm run dev pornit
-- [ ] Migrare completată la /migrate
-- [ ] Date vizibile în Firebase Console
-- [ ] Panou admin funcțional la /admin
-
----
-
-**Gata! Aplicația ta este pregătită! 🎉**
-
-Pentru suport, verifică documentația sau deschide un issue.
+- [README.md](README.md)
+- [SUPABASE_GUIDE.md](SUPABASE_GUIDE.md)
+- [SECURITY_FIX_DEPLOYMENT.md](SECURITY_FIX_DEPLOYMENT.md)

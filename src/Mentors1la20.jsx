@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo2.png";
 import { supabase } from "./supabase";
-import { formatDate, MENTORI_DISPONIBILI, MENTOR_PHOTOS, LEAD_STATUS, ONE_TO_TWENTY_STATUS, TIMEOUT_6H, checkLeadTimeout, getTimeUntilTimeout, formatTimeRemaining, getStatusBadge } from "./constants";
+import { dateTimeLocalToUtcIso, formatDate, MENTORI_DISPONIBILI, MENTOR_PHOTOS, LEAD_STATUS, ONE_TO_TWENTY_STATUS, TIMEOUT_6H, checkLeadTimeout, getTimeUntilTimeout, formatTimeRemaining, getStatusBadge, toDateTimeLocalValue } from "./constants";
 import AdminDashboard from "./components/AdminDashboard";
 import MentorDashboard from "./components/MentorDashboard";
 import { clearStoredAuth, getAuthUserFromToken, isTokenValid } from "./utils/auth";
@@ -1132,15 +1132,34 @@ export default function Mentori1La20() {
       return false;
     }
 
+    const webinar1Date = resetAll ? null : dateTimeLocalToUtcIso(customDate);
+    const webinar2Date = resetAll ? null : dateTimeLocalToUtcIso(customDate2);
+    const webinar3Date = resetAll ? null : dateTimeLocalToUtcIso(customDate3);
+
+    if (!resetAll && !webinar1Date) {
+      setError('Data sesiunii 1 nu este valida.');
+      return false;
+    }
+
+    if (!resetAll && customDate2 && !webinar2Date) {
+      setError('Data sesiunii 2 nu este valida.');
+      return false;
+    }
+
+    if (!resetAll && customDate3 && !webinar3Date) {
+      setError('Data sesiunii 3 nu este valida.');
+      return false;
+    }
+
     setLoading(true);
     setError('');
     setSuccess('');
     try {
       const result = await updateMentorSchedule({
         mentorId,
-        webinar1Date: resetAll ? null : customDate,
-        webinar2Date: resetAll ? null : customDate2,
-        webinar3Date: resetAll ? null : customDate3,
+        webinar1Date,
+        webinar2Date,
+        webinar3Date,
         resetAll,
       });
 
@@ -1176,9 +1195,9 @@ export default function Mentori1La20() {
   const openDateModal = (mentorId) => {
     setSelectedMentorForDate(mentorId);
     const mentor = mentoriData.find(m => m.id === mentorId);
-    setManualDate(mentor?.ultimulOneToTwenty ? new Date(mentor.ultimulOneToTwenty).toISOString().slice(0, 16) : '');
-    setManualDate2(mentor?.webinar2Date ? new Date(mentor.webinar2Date).toISOString().slice(0, 16) : '');
-    setManualDate3(mentor?.webinar3Date ? new Date(mentor.webinar3Date).toISOString().slice(0, 16) : '');
+    setManualDate(toDateTimeLocalValue(mentor?.ultimulOneToTwenty));
+    setManualDate2(toDateTimeLocalValue(mentor?.webinar2Date));
+    setManualDate3(toDateTimeLocalValue(mentor?.webinar3Date));
     setShowDateModal(true);
   };
 

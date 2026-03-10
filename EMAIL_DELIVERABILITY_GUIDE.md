@@ -1,263 +1,78 @@
-# 📧 Ghid complet: Evită folderul SPAM
+# Ghid deliverability email
 
-## ✅ Ce am implementat deja în cod
+Acest document acopera partea operationala pentru emailurile trimise prin Resend.
 
-### 1. **Template HTML profesional**
-- ✓ Structură HTML validă cu DOCTYPE
-- ✓ Design responsive (meta viewport)
-- ✓ Footer cu informații despre companie
-- ✓ Link-uri către website și contact
-- ✓ Anul curent dinamic în copyright
-- ✓ Adresă email destinatar vizibilă în footer
+## Ce exista deja in cod
 
-### 2. **Headers email corecte**
-- ✓ `reply_to: "support@profx.ro"` - permite răspunsuri
-- ✓ Subject personalizat cu variabile
-- ✓ Text plain alternativ pentru clienți email simpli
-- ✓ Tags pentru tracking și categorizare
+- template HTML pentru emailul de invitatie
+- template HTML pentru emailul VIP
+- `reply_to` setat la `support@profx.ro`
+- variabile dinamice in subiect si continut
+- rate limiting si retry logic in `send-bulk-emails` si `send-vip-emails`
 
-### 3. **Rate limiting**
-- ✓ Delay de 200ms între emailuri pentru a respecta limitele
+Nota: in codul actual, delay-ul intre emailuri in batch este `600ms`, nu `200ms`.
 
----
+## Configurare obligatorie pentru productie
 
-## 🚨 URGENT: Pași obligatorii pentru producție
+### 1. Verifica domeniul in Resend
 
-### **Pas 1: Configurare domeniu custom (OBLIGATORIU)**
+Fara domeniu verificat, rata de livrare va fi semnificativ mai slaba.
 
-**Status actual:** Folosești `noreply@webinar.profx.ro` dar probabil nu ai configurat domeniul în Resend.
+DNS recomandat:
 
-**Trebuie să faci:**
-
-1. **Accesează Resend Dashboard**
-   - Link: https://resend.com/domains
-   - Click pe **"Add Domain"**
-
-2. **Adaugă domeniul tău**
-   - Introdu: `profx.ro` (sau `webinar.profx.ro` dacă vrei subdomeniu)
-
-3. **Configurează DNS Records** (în panoul de hosting/domain)
-
-   **SPF Record (TXT)**
-   ```
-   Nume: @
-   Tip: TXT
-   Valoare: v=spf1 include:_spf.resend.com ~all
-   ```
-
-   **DKIM Record (CNAME)**
-   ```
-   Nume: resend._domainkey
-   Tip: CNAME
-   Valoare: resend._domainkey.resend.com
-   ```
-
-   **DMARC Record (TXT)** - Recomandat
-   ```
-   Nume: _dmarc
-   Tip: TXT
-   Valoare: v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@profx.ro; pct=100
-   ```
-
-4. **Verificare**
-   - Așteaptă 10-60 minute pentru propagare DNS
-   - Resend va verifica automat domeniul
-   - Status va deveni "Verified" (verde)
-
-**Fără acest pas, șansele să ajungi în spam sunt FOARTE MARI!** ⚠️
-
----
-
-### **Pas 2: Warming up domeniul (primele 2 săptămâni)**
-
-**De ce?** Domeniile noi sunt suspectate de spam. Trebuie să construiești reputație gradual.
-
-**Plan de warming:**
-
-| Zi | Număr emailuri | Acțiune |
-|-----|---------------|---------|
-| 1-2 | 10-20/zi | Trimite doar către contacte cunoscute |
-| 3-5 | 50-100/zi | Trimite către contacte verificate |
-| 6-10 | 200-300/zi | Crește volumul treptat |
-| 10-14 | 500+/zi | Volum normal |
-
-**🔥 IMPORTANT:** 
-- Monitorizează bounce rate - trebuie sub 5%
-- Monitorizează complaint rate - trebuie sub 0.1%
-- NU trimite către liste vechi/neactualizate
-
----
-
-## 📊 Best Practices - Checklist complet
-
-### ✅ **Conținut email**
-
-- [x] Subject line sub 50 caractere
-- [x] Evită cuvinte spam: "FREE", "CLICK HERE", "100% GRATUIT", "!!!"
-- [x] Raport text/imagine echilibrat (60% text, 40% imagini)
-- [x] Link-uri clare și visible
-- [x] Personalizare (folosește {{nume}})
-- [ ] **Include un link de unsubscribe** (GDPR obligatoriu!)
-
-**Exemplu subject line bun:**
-```
-✓ "{{nume}}, Webinar 1:20 cu {{mentorName}} pe {{webinarDate}}"
-✓ "Confirmă prezența la webinar - ProFX Mentori"
+```text
+SPF:   v=spf1 include:_spf.resend.com ~all
+DKIM:  resend._domainkey -> resend._domainkey.resend.com
+DMARC: v=DMARC1; p=quarantine; rua=mailto:dmarc-reports@profx.ro; pct=100
 ```
 
-**Exemplu subject line rău:**
-```
-✗ "CLICK AICI!!! 100% GRATUIT Webinar AMAZING!!!"
-✗ "RE: RE: FW: Important!!!"
-```
+### 2. Fa warming up pe domeniu
 
----
+Plan practic:
 
-### ✅ **Lista de contacte**
+- ziua 1-2: 20-50 emailuri / zi
+- ziua 3-5: 100-200 emailuri / zi
+- ziua 6-10: 300-500 emailuri / zi
+- dupa ziua 10: cresti treptat spre volumul normal
 
-- [ ] **Double opt-in** - utilizatorii confirmă prin email că vor să primească mesaje
-- [ ] **Curăță lista regulat** - șterge bounce-uri și contacte inactive
-- [ ] **Segmentare** - trimite doar către cei interesați
-- [ ] **Nu cumpăra liste de emailuri** - NICIODATĂ!
+### 3. Monitorizeaza metricile
 
----
+Tinteste:
 
-### ✅ **Monitorizare și metrici**
+- bounce rate sub 5%
+- complaint rate sub 0.1%
+- open rate peste 20%
 
-**Verifică zilnic în Resend Dashboard:**
-- **Open Rate** - ideal: >20%
-- **Click Rate** - ideal: >2%
-- **Bounce Rate** - MAXIM 5% (peste = problemă serioasă)
-- **Spam Complaint Rate** - MAXIM 0.1%
+Verificare: https://resend.com/emails
 
-**Link monitorizare:** https://resend.com/emails
+## Recomandari de continut
 
----
+- evita subiecte agresive sau spammy
+- pastreaza linkul de confirmare clar vizibil
+- personalizeaza cu `{{nume}}`, `{{mentorName}}`, `{{webinarDate}}`
+- testeaza pe Gmail, Outlook si Yahoo inainte de un batch mare
 
-### ✅ **Testare înainte de trimitere masivă**
+## Gap-uri actuale de produs
 
-**Test #1: Mail-tester.com**
-```bash
-1. Accesează: https://www.mail-tester.com/
-2. Copiază adresa generată (ex: test-abc123@srv1.mail-tester.com)
-3. Trimite un email de test către acea adresă
-4. Verifică scorul - MINIM 8/10 pentru a evita spam
-```
+Acestea sunt recomandari, nu lucruri deja implementate:
 
-**Test #2: Teste multiple cu domenii diferite**
-```
-Trimite email de test către:
-- Gmail: test@gmail.com
-- Outlook: test@outlook.com
-- Yahoo: test@yahoo.com
-- Propriul domeniu: test@profx.ro
-```
+- lipseste un flux de unsubscribe / opt-out
+- nu exista webhook automat pentru bounce-uri in repo
+- nu exista marcare nativa `emailValid` sau `bounceReason` in schema principala
 
-Verifică să ajungă în **Inbox**, nu în Spam/Promotions.
+## Test minim inainte de campanie
 
----
+1. trimite un email singular catre o adresa reala
+2. verifica Inbox, Spam si linkul de confirmare
+3. ruleaza un test pe mail-tester.com
+4. trimite un batch mic de 3-5 leaduri de test
 
-## 🔧 Implementări recomandate în cod
+## Cand sa opresti trimiterea
 
-### **1. Link de Unsubscribe (OBLIGATORIU pentru GDPR)**
-
-Modifică template-ul să includă:
-
-```typescript
-// În footer, adaugă:
-<p style="margin: 10px 0 0 0; font-size: 11px; color: #aaa; text-align: center;">
-  <a href="{{unsubscribeLink}}" style="color: #999; text-decoration: underline;">
-    Nu mai doresc să primesc emailuri
-  </a>
-</p>
-```
-
-**Implementare backend:**
-```typescript
-// În Mentors1la20.jsx, adaugă:
-const unsubscribeLink = `${origin}/unsubscribe/${lead.id}`;
-
-// Adaugă în replacements:
-"{{unsubscribeLink}}": unsubscribeLink,
-```
-
----
-
-### **2. Verificare bounce-uri automat**
-
-Resend trimite webhook-uri pentru bounce-uri. Implementează:
-
-```typescript
-// Nova funcție Supabase: handle-bounce-webhook
-serve(async (req) => {
-  const { type, data } = await req.json();
-  
-  if (type === "email.bounced") {
-    // Marchează email-ul ca invalid în baza de date
-    await supabase
-      .from("leaduri")
-      .update({ emailValid: false, bounceReason: data.reason })
-      .eq("email", data.email);
-  }
-  
-  return new Response("OK", { status: 200 });
-});
-```
-
-Configurează webhook în Resend: https://resend.com/settings/webhooks
-
----
-
-### **3. Evită trimiterea repetată**
-
-```typescript
-// Înainte de trimitere, verifică:
-const { data: recentEmail } = await supabase
-  .from("leaduri")
-  .select("dataTrimiereEmail")
-  .eq("id", lead.id)
-  .single();
-
-const daysSinceLastEmail = recentEmail?.dataTrimiereEmail 
-  ? (Date.now() - new Date(recentEmail.dataTrimiereEmail).getTime()) / (1000 * 60 * 60 * 24)
-  : 999;
-
-if (daysSinceLastEmail < 3) {
-  console.log(`⏰ Skip email pentru ${lead.email} - trimis recent`);
-  continue; // Skip acest lead
-}
-```
-
----
-
-## 🚀 Deploy modificări
-
-După ce ai făcut toate modificările, redeploy funcțiile:
-
-```bash
-cd supabase
-npx supabase functions deploy send-email
-npx supabase functions deploy send-bulk-emails
-```
-
----
-
-## 📱 Contact și suport
-
-**Resend Support:**
-- Email: support@resend.com
-- Docs: https://resend.com/docs
-- Discord: https://resend.com/discord
-
-**GDPR Compliance:**
-- Informare: https://gdpr.eu/
-- Template: https://gdpr.eu/privacy-notice/
-
----
-
-## ⚠️ Checklist final înainte de lansare
-
-- [ ] Domeniu custom configurat și verificat în Resend
+- daca testele ajung in Spam
+- daca bounce rate-ul depaseste 5%
+- daca domeniul nu este inca verificat complet
+- daca `support@profx.ro` nu este monitorizat
 - [ ] DNS records (SPF, DKIM, DMARC) setate corect
 - [ ] Test cu mail-tester.com - scor >8/10
 - [ ] Link de unsubscribe funcțional

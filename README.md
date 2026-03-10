@@ -1,203 +1,116 @@
-# 🎓 ProFx Mentori - Sistem Management Clase
+# ProFX Webinarii
 
-Aplicație web pentru gestionarea mentorilor, claselor și studenților cu integrare Firebase.
+Aplicatie web pentru captarea leadurilor, alocarea lor catre mentori si operarea webinarului 1:20 ProFX. Stack-ul actual este React + Vite pe frontend, Supabase pentru baza de date si Edge Functions, si Resend pentru trimiterea emailurilor.
 
-## 🚀 Features
+## Ce face aplicatia
 
-- ✅ **Gestionare Mentori** - Adaugă, editează, șterge mentori
-- ✅ **Clase & Studenți** - Organizează studenții pe clase
-- ✅ **Tracking Prezență** - Fiecare mentor își gestionează clasele și studenții
-- ✅ **Panou Admin** - Interfață completă pentru administrare
-- ✅ **Firebase Integration** - Date sincronizate în timp real
-- ✅ **Asistent Migrare** - Tool pentru migrarea datelor inițiale
+- Formular public de inscriere pentru leaduri
+- Confirmare participare prin link unic cu expirare la 6 ore
+- Dashboard protejat pentru admin si mentori
+- Alocare automata sau manuala a leadurilor catre mentori
+- Programare sesiuni webinar si urmarirea prezentei pe 3 sesiuni
+- Emailuri individuale, bulk si VIP prin Resend
+- Administrare conturi utilizatori din dashboard
+- Import leaduri din Excel si export date
 
-## 📦 Instalare
+## Rute disponibile
 
-```bash
-# Clonează repo-ul
-git clone <url>
-cd profx-webinarii
-
-# Instalează dependințele
-npm install
-
-# Pornește development server
-npm run dev
+```text
+/                  -> formular public de inscriere
+/login             -> autentificare admin / mentor
+/confirm/:token    -> confirmarea participarii din email
+/admin             -> dashboard protejat
 ```
 
-## 🔧 Configurare Firebase
+## Stack tehnic
 
-1. Creează un proiect Firebase la [Firebase Console](https://console.firebase.google.com/)
-2. Activează **Firestore Database**
-3. Copiază configurația din Project Settings
-4. Actualizează [firebase.js](src/firebase.js) cu configurația ta
+- React 19
+- Vite 7
+- React Router 7
+- Supabase JavaScript SDK
+- Supabase Postgres + Row Level Security
+- Supabase Edge Functions (Deno)
+- Resend pentru emailuri tranzactionale
+- ExcelJS pentru import / export
 
-## 📖 Utilizare
+## Arhitectura pe scurt
 
-### Structura Aplicației
+- Frontend-ul public scrie leaduri in tabela `leaduri` folosind cheia publishable Supabase si politici RLS pentru `anon`
+- Login-ul nu expune tabela `users`; autentificarea se face prin Edge Function-ul `authenticate`
+- Actiunile privilegiate din dashboard trec prin Edge Functions care valideaza JWT-ul aplicatiei si folosesc `service_role`
+- Confirmarea din email foloseste `confirmationToken` si actualizeaza leadul direct din pagina publica
 
-```
-/                  → Pagina principală (tracking clase mentori)
-/admin            → Panou administrare (mentori, clase, studenți)
-/migrate          → Asistent migrare date
-```
+## Structura relevanta a proiectului
 
-### Migrarea Datelor Inițiale
-
-1. Accesează `/migrate` în browser
-2. Click pe **"🚀 Rulează Migrare Completă"**
-3. Verifică în console că toate pașii s-au executat
-4. Mergi la `/admin` pentru a vedea datele
-
-SAU rulează pașii individuali:
-- **Pas 1**: Inițializează mentori (Sergiu, Dan, Tudor, Eli, Adrian)
-- **Pas 2**: Creează clasă cu 5 studenți demo
-
-### Documentație Completă
-
-Vezi [FIREBASE_GUIDE.md](FIREBASE_GUIDE.md) pentru:
-- 📚 Ghid complet de utilizare
-- 🔐 Configurare Security Rules
-- 💡 Exemple de cod
-- 🆘 Troubleshooting
-
-## 🏗️ Structura Proiectului
-
-```
+```text
 src/
-├── components/          # Componente React
-│   └── ui/
-├── pages/              # Pagini principale
-│   ├── AdminPanel.jsx       # Panou admin
-│   └── MigrationHelper.jsx  # Asistent migrare
-├── scripts/            # Scripturi utilitate
-│   └── migrateToFirebase.js
-├── services/           # Servicii Firebase
-│   ├── firebaseService.js   # CRUD operații
-│   └── adminService.js      # Funcții admin
-├── utils/              # Funcții helper
-│   └── dates.js
-├── Mentors1la20.jsx    # Componenta principală tracking mentori
-├── firebase.js         # Configurare Firebase
-└── App.jsx            # Component principal + routing
+  App.jsx
+  Mentors1la20.jsx
+  constants.js
+  supabase.js
+  components/
+    AdminDashboard.jsx
+    MentorDashboard.jsx
+    ProtectedRoute.jsx
+  pages/
+    RegisterForm.jsx
+    Login.jsx
+    ConfirmWebinar.jsx
+  utils/
+    auth.js
+    sanitize.js
+
+supabase/
+  config.toml
+  functions/
+    authenticate/
+    manage-users/
+    reset-password/
+    send-email/
+    send-bulk-emails/
+    send-vip-emails/
+    delete-leads/
+    update-mentor-schedule/
+    allocate-leads/
+    update-lead-attendance/
+    update-lead/
+    manage-email-templates/
 ```
 
-## 🔥 Servicii Firebase
+## Setup rapid
 
-### firebaseService.js
-Operații CRUD pentru:
-- Mentori (save, get, delete)
-- Clase (create, update, get, delete)
-- Studenți (create, update, get, delete)
+1. Copiaza `.env.example` in `.env` si completeaza variabilele Supabase.
+2. Ruleaza `npm install`.
+3. Ruleaza in Supabase SQL Editor fisierele de schema si securitate descrise in [QUICKSTART.md](QUICKSTART.md).
+4. Configureaza secretele Edge Functions, in special `AUTH_JWT_SECRET` si `RESEND_API_KEY`.
+5. Deploiaza Edge Functions sau ruleaza `supabase start` pentru mediu local.
+6. Porneste frontend-ul cu `npm run dev`.
 
-### adminService.js
-Funcții avansate:
-- `initializeMentorsInFirebase()` - Inițializează mentori
-- `createCompleteClass()` - Creează clasă + studenți
-- `getClassStatistics()` - Statistici clasă
-- `exportAllData()` - Backup date
-- `validateDataConsistency()` - Validare integritate date
-
-## 📊 Baza de Date Firebase
-
-### Colecții Firestore:
-
-**mentori**
-```javascript
-{
-  id: "sergiu",      // Document ID
-  name: "Sergiu",
-  email: "sergiu@example.com",
-  password: "Sergiu",
-  active: true,
-  updatedAt: timestamp
-}
-```
-
-**clase**
-```javascript
-{
-  id: "auto-generated",
-  name: "ProFx Q1 2025",
-  startDate: "2025-01-10",
-  endDate: "2025-04-10",
-  studentIds: ["student1", "student2"],
-  active: true,
-  createdAt: timestamp,
-  updatedAt: timestamp
-}
-```
-
-**studenti**
-```javascript
-{
-  id: "auto-generated",
-  name: "Ion Popescu",
-  email: "ion@example.com",
-  phone: "0712345678",
-  classId: "class123",
-  createdAt: timestamp,
-  updatedAt: timestamp
-}
-```
-
-## 🛠️ Development
+## Comenzi utile
 
 ```bash
-# Development server
 npm run dev
-
-# Build pentru producție
 npm run build
-
-# Preview build
 npm run preview
-
-# Lint
 npm run lint
 ```
 
-## 🔐 Security Rules (Recomandat)
+## Stare verificata in repo
 
-Adaugă în Firebase Console → Firestore → Rules:
+- `npm run build` trece
+- `npm run lint` trece
+- Nu exista teste automate in repo in momentul de fata
 
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Doar autentificați pot scrie, toată lumea poate citi
-    match /{document=**} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-  }
-}
-```
+## Documentatie inclusa
 
-## 📱 Tecnologii
+- [QUICKSTART.md](QUICKSTART.md) - setup local si ordinea recomandata de instalare
+- [SUPABASE_GUIDE.md](SUPABASE_GUIDE.md) - baza de date, autentificare, Edge Functions si fluxuri
+- [SECURITY_FIX_DEPLOYMENT.md](SECURITY_FIX_DEPLOYMENT.md) - activare RLS si hardening pentru medii existente
+- [EMAIL_DELIVERABILITY_GUIDE.md](EMAIL_DELIVERABILITY_GUIDE.md) - configurare Resend si bune practici pentru deliverability
+- [PRE_LAUNCH_CHECKLIST.md](PRE_LAUNCH_CHECKLIST.md) - checklist operational inainte de lansare
+- [supabase/README.md](supabase/README.md) - deploy si debugging pentru Edge Functions
+- [supabase/RESEND_SETUP.md](supabase/RESEND_SETUP.md) - configurarea cheii Resend si a domeniului de trimitere
 
-- **React 19** - UI Framework
-- **Vite** - Build tool
-- **Firebase/Firestore** - Backend & Database
-- **React Router** - Routing
-- **Tailwind CSS** - Styling
+## Observatie despre codul legacy
 
-## 🤝 Contribuție
-
-1. Fork repo-ul
-2. Creează branch (`git checkout -b feature/AmazingFeature`)
-3. Commit (`git commit -m 'Add some AmazingFeature'`)
-4. Push (`git push origin feature/AmazingFeature`)
-5. Deschide Pull Request
-
-## 📝 License
-
-MIT
-
-## 👥 Echipa
-
-ProFx - Trading Mentorship Platform
-
----
-
-**Happy Coding! 🚀**
+Folderul `functions/` contine o implementare Firebase Functions mai veche. Fluxul activ al aplicatiei este cel din `supabase/functions/`. Documentatia din acest repo trateaza Supabase drept backend-ul curent.

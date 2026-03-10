@@ -1,142 +1,81 @@
-# 🔒 CRITICAL SECURITY FIX - DEPLOYMENT GUIDE
+# Security Deployment Guide
 
-## ⚠️ PROBLEM IDENTIFIED
+Acest ghid explica ordinea corecta pentru activarea securitatii Supabase in proiectul actual.
 
-Your Supabase database has **CRITICAL security vulnerabilities**:
+## Ce securizeaza aceste fisiere
 
-1. **Password Exposure** - `users` table with plain text passwords is publicly accessible
-2. **No RLS Protection** - All tables have Row Level Security disabled
-3. **Data Exposure Risk** - Sensitive data can be accessed by anyone with your API keys
+- `supabase-security-fix.sql` - activeaza RLS si politicile pentru tabelele principale
+- `supabase-password-hash-migration.sql` - migreaza parole vechi in bcrypt
+- `supabase-auth-rpc.sql` - adauga RPC-uri sigure pentru autentificare si resetare parola
+- `supabase/functions/authenticate/index.ts` - login fara expunerea tabelei `users`
+- `supabase/functions/reset-password/index.ts` - resetare parola doar pentru admin
 
-## ✅ SOLUTION IMPLEMENTED
+## Pentru o instalare noua
 
-### Files Created/Modified:
+Ruleaza in SQL Editor:
 
-1. **`supabase-security-fix.sql`** - Enables RLS and creates security policies
-2. **`supabase-password-hash-migration.sql`** - Hashes existing plaintext passwords
-2. **`supabase/functions/authenticate/index.ts`** - New secure login Edge Function
-3. **`supabase/functions/reset-password/index.ts`** - Admin-only password reset Edge Function
-3. **`src/pages/Login.jsx`** - Updated to use secure authentication
-4. **`supabase/functions/send-bulk-emails/index.ts`** - Already fixed with rate limiting
+1. `supabase-schema.sql`
+2. `supabase-security-fix.sql`
+3. `supabase-auth-rpc.sql`
 
-## 📋 DEPLOYMENT STEPS (MUST FOLLOW IN ORDER!)
+Nu ai nevoie de migrarea parolelor daca baza este noua, pentru ca `supabase-schema.sql` insereaza deja parole bcrypt pentru utilizatorii seed.
 
-### Step 1: Deploy Edge Functions
+## Pentru o instanta veche
+
+Ruleaza in ordinea urmatoare:
+
+1. `supabase-password-hash-migration.sql`
+2. `supabase-auth-rpc.sql`
+3. `supabase-security-fix.sql`
+
+## Deploy functii critice
 
 ```bash
 npx supabase functions deploy authenticate
+npx supabase functions deploy manage-users
 npx supabase functions deploy reset-password
 ```
 
-This creates secure endpoints for login and admin password resets without exposing the users table.
+In practica, este recomandat sa deployezi toate functiile folosite de dashboard.
 
-### Step 2: Run Password Hash Migration (HIGH PRIORITY)
+## Ce ramane functional dupa RLS
 
-Open Supabase SQL Editor and run:
-```
-supabase-password-hash-migration.sql
-```
+- formularul public de inscriere
+- confirmarea participarii prin link
+- dashboard-ul admin / mentor
+- trimiterea emailurilor prin Edge Functions
+- resetarea parolelor de catre admin
 
-This converts existing plaintext passwords to bcrypt hashes.
+## Ce trebuie sa fie blocat
 
-### Step 3: Test Login Still Works (BEFORE enabling RLS)
+- acces direct din browser la tabela `users`
+- acces neautorizat la hash-urile de parola
 
-1. Open your app: http://localhost:5173
-2. Try logging in with: `admin` / `admin`
-3. Verify it works ✅
+## Verificare dupa deploy
 
-**Why test now?** If login fails, we can debug before enabling RLS.
+- login-ul functioneaza
+- dashboard-ul incarca leaduri si mentori
+- `users` nu mai este accesibila direct cu cheia publishable
+- emailurile se trimit in continuare
 
-### Step 4: Enable RLS (CRITICAL STEP)
+## Schimbare parole
 
-Open Supabase SQL Editor and run the entire content of:
-```
-supabase-security-fix.sql
-```
+Pentru productie, schimba parolele seed imediat dupa prima logare.
 
-This will:
-- ✅ Enable RLS on all tables
-- ✅ Protect the `users` table (only Edge Functions can access)
-- ✅ Allow current app functionality (anon key can still access other tables)
-
-### Step 5: Test Everything
-
-After enabling RLS, test:
-
-- [ ] Login works (admin/admin)
-- [ ] Dashboard loads
-- [ ] Can view mentors
-- [ ] Can view leads
-- [ ] Can send emails
-- [ ] Bulk email sending works
-
-### Step 6: Verify Security is Fixed
-
-1. Go to Supabase Dashboard → Database → Tables
-2. Try to view `users` table with API - should be BLOCKED ✅
-3. Check security warnings - should be resolved ✅
-
-## 🚨 CRITICAL: What Happens After RLS is Enabled?
-
-### ✅ WILL WORK:
-- Dashboard, mentors, leads (anon key can access)
-- Email sending (uses service_role key)
-- Login (via Edge Function)
-
-### ❌ WILL BE BLOCKED:
-- Direct access to `users` table from browser/API
-- Unauthorized access to password data
-
-## 🔐 NEXT STEPS (Recommended but not urgent)
-
-### 1. Change Passwords Safely (Admin)
-
-Do not edit plaintext values directly in table rows.
-
-Use the `reset-password` Edge Function (admin JWT required), for example:
+Exemplu pentru resetare prin functie:
 
 ```bash
 curl -X POST "https://<PROJECT-REF>.supabase.co/functions/v1/reset-password" \
-	-H "Content-Type: application/json" \
-	-H "Authorization: Bearer <ADMIN_JWT_TOKEN>" \
-	-d '{"username":"Sergiu","newPassword":"NewStrongPass123!"}'
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <ADMIN_APP_JWT>" \
+  -d '{"username":"Sergiu","newPassword":"NewStrongPass123!"}'
 ```
 
-Or from SQL Editor (manual admin operation):
+## Rollback de urgenta
+
+Doar daca ai blocat accidental aplicatia:
 
 ```sql
-update users
-set password = crypt('NewStrongPass123!', gen_salt('bf', 12))
-where username = 'Sergiu';
-```
-
-### 2. Migrate to Supabase Auth (Medium Priority)
-
-Consider using Supabase's built-in authentication instead of custom:
-- Better security
-- Built-in session management
-- No need to manage passwords
-
-### 3. Add More Granular Policies (Low Priority)
-
-Currently anon key can access most tables. Consider:
-- Limiting based on authenticated user
-- Read-only policies for certain fields
-- Audit logging
-
-## 📊 MONITORING
-
-After deployment, monitor:
-1. Supabase Dashboard → Security tab
-2. Should show: **"0 Critical Issues"** ✅
-3. Edge Function logs for authentication attempts
-
-## 🆘 ROLLBACK (If Something Breaks)
-
-If you need to rollback, run in SQL Editor:
-
-```sql
--- WARNING: This disables security again!
 ALTER TABLE users DISABLE ROW LEVEL SECURITY;
 ALTER TABLE mentori DISABLE ROW LEVEL SECURITY;
 ALTER TABLE leaduri DISABLE ROW LEVEL SECURITY;
@@ -146,29 +85,4 @@ ALTER TABLE clase DISABLE ROW LEVEL SECURITY;
 ALTER TABLE studenti DISABLE ROW LEVEL SECURITY;
 ```
 
-But this brings back the security vulnerabilities!
-
-## ✅ VERIFICATION CHECKLIST
-
-Before marking as complete:
-
-- [ ] `authenticate` function deployed
-- [ ] SQL security fix applied
-- [ ] Login tested and working
-- [ ] Dashboard fully functional
-- [ ] Email sending works
-- [ ] Supabase shows 0 critical security issues
-- [ ] No errors in console
-
-## 📝 NOTES
-
-- The `users` table is now **protected** - only Edge Functions can access it
-- Other tables still allow anon access (needed for current architecture)
-- This is a **balanced approach** - fixes critical issue while maintaining functionality
-- Full migration to Edge Functions recommended for maximum security
-
----
-
-**Priority**: 🔴 CRITICAL - Deploy ASAP
-**Risk**: Low (changes are backward compatible)
-**Impact**: HIGH - Fixes password exposure vulnerability
+Acest rollback reduce securitatea, deci trebuie folosit doar temporar.

@@ -1,15 +1,21 @@
-# Supabase Edge Functions - ProFX Mentori
+# Supabase Edge Functions
 
-## Funcții disponibile:
+Folderul `supabase/` contine configurarea CLI si functiile Deno folosite de aplicatia React.
 
-1. **send-email** - Trimite un email către un singur lead
-2. **send-bulk-emails** - Trimite emailuri în masă către toți leadurile unui mentor
-3. **delete-leads** - Șterge leaduri din panoul de admin prin service role (single, toate, sau per mentor)
-4. **update-mentor-schedule** - Setează sau resetează sesiunile webinar 1:20 pentru admin sau mentorul propriu
-5. **allocate-leads** - Alocă manual sau automat leaduri către mentori prin service role
-6. **update-lead-attendance** - Marchează și corectează prezența leadurilor din dashboard-ul mentorului
-7. **update-lead** - Editează leaduri din dashboard-ul de admin prin service role
-8. **manage-email-templates** - Citește și salvează template-urile email/VIP prin service role
+## Functii existente
+
+- `authenticate` - autentificare custom si emitere JWT
+- `manage-users` - listare si actualizare conturi
+- `reset-password` - resetare parola de catre admin
+- `send-email` - trimitere email individual pentru lead
+- `send-bulk-emails` - trimitere emailuri pentru leadurile active ale unui mentor
+- `send-vip-emails` - trimitere email VIP pentru absolventi
+- `delete-leads` - stergere leaduri si sincronizare alocari
+- `update-mentor-schedule` - setare / resetare date webinar
+- `allocate-leads` - alocare manuala sau automata
+- `update-lead-attendance` - operare prezenta pe sesiuni
+- `update-lead` - editare lead
+- `manage-email-templates` - citire si salvare template-uri din `settings`
 
 ## Instalare Supabase CLI
 
@@ -20,137 +26,102 @@ irm https://raw.githubusercontent.com/supabase/supabase/HEAD/packages/cli/script
 # macOS / Linux
 brew install supabase/tap/supabase
 
-# Sau cu npm
+# sau cu npm
 npm install -g supabase
 ```
 
-## Deploy funcțiilor
-
-### 1. Login în Supabase CLI
+## Link la proiect
 
 ```bash
 npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF
 ```
 
-### 2. Link proiectul
+## Secrete necesare
 
 ```bash
-npx supabase link --project-ref lefdbvjzyrcclnwlriyx
+npx supabase secrets set AUTH_JWT_SECRET=your-long-random-secret
+npx supabase secrets set RESEND_API_KEY=re_xxxxxxxxxxxxxxxxx
 ```
 
-### 3. Setează secretele necesare
+Setate automat in runtime-ul hostat Supabase:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## De ce `verify_jwt = false`
+
+In `supabase/config.toml`, fiecare functie este configurata cu `verify_jwt = false` la nivel de gateway. Acest lucru este intentional: functiile valideaza manual JWT-ul aplicatiei, pentru ca folosim un token custom emis de `authenticate`, nu Supabase Auth standard.
+
+## Deploy recomandat
 
 ```bash
-# RESEND_API_KEY - API key-ul de la Resend.com
-npx supabase secrets set RESEND_API_KEY=re_xxxxxxxxxx
-
-# SUPABASE_URL și SUPABASE_SERVICE_ROLE_KEY sunt automate setate de Supabase
-```
-
-**Unde găsești RESEND_API_KEY:**
-- Intră pe https://resend.com/api-keys
-- Creează un nou API Key sau folosește unul existent
-- Copiază cheia și folosește-o în comanda de mai sus
-
-### 4. Deploy funcțiile
-
-```bash
-# Deploy funcțiile principale
+npx supabase functions deploy authenticate
+npx supabase functions deploy manage-users
+npx supabase functions deploy reset-password
 npx supabase functions deploy send-email
 npx supabase functions deploy send-bulk-emails
-npx supabase functions deploy delete-leads --no-verify-jwt
-npx supabase functions deploy update-mentor-schedule --no-verify-jwt
-npx supabase functions deploy allocate-leads --no-verify-jwt
-npx supabase functions deploy update-lead-attendance --no-verify-jwt
-npx supabase functions deploy update-lead --no-verify-jwt
-npx supabase functions deploy manage-email-templates --no-verify-jwt
-
-# Sau deploy toate dintr-o dată
-npx supabase functions deploy
+npx supabase functions deploy send-vip-emails
+npx supabase functions deploy delete-leads
+npx supabase functions deploy update-mentor-schedule
+npx supabase functions deploy allocate-leads
+npx supabase functions deploy update-lead-attendance
+npx supabase functions deploy update-lead
+npx supabase functions deploy manage-email-templates
 ```
 
-## Test local (opțional)
+## Dezvoltare locala
 
 ```bash
-# Pornește Supabase local
 npx supabase start
-
-# Deploy funcțiile local
-npx supabase functions serve send-email
-npx supabase functions serve send-bulk-emails
+npx supabase functions serve
 ```
 
-## Verificare după deploy
+Porturi utile definite in `config.toml`:
 
-După deploy, funcțiile vor fi disponibile la:
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/send-email`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/send-bulk-emails`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/delete-leads`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-mentor-schedule`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/allocate-leads`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-lead-attendance`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/update-lead`
-- `https://lefdbvjzyrcclnwlriyx.supabase.co/functions/v1/manage-email-templates`
+- API: `54321`
+- DB: `54322`
+- Studio: `54323`
+- Inbucket: `54324`
 
-Aplicația React deja folosește aceste URL-uri, așa că nu mai trebuie modificat nimic în cod! 🎉
-
-## Logs și debugging
+## Debugging
 
 ```bash
-# Vezi logs-urile funcțiilor
-npx supabase functions insights send-email
-npx supabase functions insights send-bulk-emails
-npx supabase functions insights delete-leads
-npx supabase functions insights update-mentor-schedule
-npx supabase functions insights allocate-leads
-npx supabase functions insights update-lead-attendance
-npx supabase functions insights update-lead
-npx supabase functions insights manage-email-templates
+npx supabase functions list
+npx supabase functions logs authenticate
+npx supabase functions logs send-email
+npx supabase functions logs send-bulk-emails
 ```
 
-Sau direct în Supabase Dashboard:
-1. Mergi la **Edge Functions** în sidebar
-2. Selectează funcția
-3. Click pe **Logs** tab
+Sau in Supabase Dashboard:
 
-## Structura fișierelor
+1. Edge Functions
+2. selectezi functia
+3. verifici `Logs`
 
-```
+## Structura folderului
+
+```text
 supabase/
-└── functions/
-    ├── send-email/
-    │   └── index.js
-    └── send-bulk-emails/
-        └── index.js
-    └── delete-leads/
-        └── index.ts
-    └── update-mentor-schedule/
-        └── index.ts
-    └── allocate-leads/
-        └── index.ts
-    └── update-lead-attendance/
-        └── index.ts
-    └── update-lead/
-        └── index.ts
-    └── manage-email-templates/
-        └── index.ts
+  config.toml
+  functions/
+    authenticate/
+    manage-users/
+    reset-password/
+    send-email/
+    send-bulk-emails/
+    send-vip-emails/
+    delete-leads/
+    update-mentor-schedule/
+    allocate-leads/
+    update-lead-attendance/
+    update-lead/
+    manage-email-templates/
 ```
 
-## Variabile de mediu necesare în Supabase
+## Note importante
 
-Acestea sunt setate automat sau le configurezi cu `supabase secrets set`:
-
-- ✅ `SUPABASE_URL` - Automat
-- ✅ `SUPABASE_SERVICE_ROLE_KEY` - Automat (nu confunda cu PUBLISHABLE_KEY!)
-- ⚠️ `RESEND_API_KEY` - Trebuie setat manual (vezi pasul 3)
-
-## Email-ul de la care se trimit mesajele
-
-**Important:** În cod folosim `onboarding@resend.dev` care este email-ul de test al Resend. 
-Pentru producție, trebuie să:
-
-1. Adaugi propriul domeniu în Resend Dashboard
-2. Verifici domeniul (DNS records)
-3. Schimbi `from` în cod de la `onboarding@resend.dev` la `mentori@tau-domeniu.ro`
-
-Pentru test, `onboarding@resend.dev` funcționează perfect! ✉️
+- login-ul din frontend depinde de `authenticate`
+- functiile de email depind de `RESEND_API_KEY`
+- actiunile admin-only valideaza `app_role === admin`
+- template-urile lipsa sunt create automat in `settings` de `manage-email-templates`
